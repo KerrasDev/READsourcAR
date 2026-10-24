@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resource Guardian Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <header class="header">
+    <h1>🛡️ Resource Guardian Settings</h1>
+  </header>
+
+  <main class="container">
+    <!-- Resource Policies -->
+    <section class="section card">
+      <h2>Resource Guard Policies</h2>
+      <p class="section-desc">Select which resource types to block across all websites by default.</p>
+      <div id="policyContainer" class="policy-grid">
+        <!-- Dynamically rendered -->
+      </div>
+    </section>
+
+    <!-- Site Exceptions -->
+    <section class="section card">
+      <h2>Site Exceptions & Overrides</h2>
+      <p class="section-desc">Manage domain-specific rules and paused protections.</p>
+      <div class="add-exception-row">
+        <input type="text" id="newExceptionDomain" placeholder="e.g. example.com">
+        <button id="addExceptionBtn" class="primary-btn">Add Exception</button>
+      </div>
+      <ul id="exceptionsList" class="exceptions-list">
+        <!-- Dynamically rendered -->
+      </ul>
+    </section>
+
+    <!-- Translation Configuration -->
+    <section class="section card">
+      <h2>Translation Optimizer</h2>
+      <div class="form-group">
+        <label for="transMode">Translation Mode</label>
+        <select id="transMode">
+          <option value="manual">Manual (User explicitly initiates)</option>
+          <option value="selective">Selective (Prompt when non-native text detected)</option>
+          <option value="assisted">Assisted (Selection / Main Content Focus)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="providerType">Translation Provider</label>
+        <select id="providerType">
+          <option value="mock">Built-in Mock Engine (Offline/Test)</option>
+          <option value="manual">Manual Copy-Paste Workflow</option>
+          <option value="custom_api">Custom REST API Endpoint</option>
+        </select>
+      </div>
+
+      <div id="customApiFields" class="form-group hidden">
+        <label for="apiEndpoint">API Endpoint URL</label>
+        <input type="text" id="apiEndpoint" placeholder="https://api.example.com/translate">
+        <label for="apiKey">API Key (Optional)</label>
+        <input type="password" id="apiKey" placeholder="Bearer Key">
+      </div>
+    </section>
+
+    <!-- Privacy & Data -->
+    <section class="section card">
+      <h2>Privacy & Data Management</h2>
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" id="clearStatsOnRestart">
+          <span>Clear request statistics on browser restart</span>
+        </label>
+      </div>
+      <div class="btn-row">
+        <button id="exportSettingsBtn" class="secondary-btn">Export Settings</button>
+        <button id="importSettingsBtn" class="secondary-btn">Import Settings</button>
+        <input type="file" id="importFileInput" style="display: none;" accept=".json">
+        <button id="resetDefaultsBtn" class="danger-btn">Reset Defaults</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

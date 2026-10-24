@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resource Guardian</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <span class="logo">🛡️</span>
+      <h1>Resource Guardian</h1>
+    </div>
+    <button id="optionsBtn" title="Open Settings">⚙️</button>
+  </div>
+
+  <!-- Global Protection Toggle -->
+  <div class="card status-card">
+    <div class="status-row">
+      <span>Protection State:</span>
+      <strong id="globalStatus" class="status-active">ENABLED</strong>
+    </div>
+    <button id="toggleProtectionBtn" class="primary-btn">Pause Global Protection</button>
+  </div>
+
+  <!-- Current Site Quick Controls -->
+  <div class="card site-card">
+    <div class="site-header">
+      <span class="card-title">Current Domain</span>
+      <span id="currentDomain" class="domain-badge">example.com</span>
+    </div>
+    <div class="site-actions">
+      <button id="toggleSitePauseBtn" class="secondary-btn">Pause for Domain</button>
+    </div>
+  </div>
+
+  <!-- Quick Category Toggles -->
+  <div class="card categories-card">
+    <span class="card-title">Resource Rules</span>
+    <div class="category-grid">
+      <label class="toggle-item">
+        <input type="checkbox" id="cat-thirdPartyScript">
+        <span>Block 3rd-Party Scripts</span>
+      </label>
+      <label class="toggle-item">
+        <input type="checkbox" id="cat-script">
+        <span>Block All Scripts</span>
+      </label>
+      <label class="toggle-item">
+        <input type="checkbox" id="cat-iframe">
+        <span>Block Iframes</span>
+      </label>
+      <label class="toggle-item">
+        <input type="checkbox" id="cat-image">
+        <span>Block Images</span>
+      </label>
+      <label class="toggle-item">
+        <input type="checkbox" id="cat-media">
+        <span>Block Media (Video/Audio)</span>
+      </label>
+      <label class="toggle-item">
+        <input type="checkbox" id="cat-popup">
+        <span>Block Popups</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Quick Translation Action -->
+  <div class="card translation-card">
+    <span class="card-title">Translation Quick Action</span>
+    <div class="translation-controls">
+      <select id="targetLangSelect">
+        <option value="en">English</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="ar">Arabic</option>
+        <option value="de">German</option>
+        <option value="zh">Chinese</option>
+      </select>
+      <div class="btn-group">
+        <button id="translateSelectionBtn" class="action-btn">Translate Selection</button>
+        <button id="restoreTextBtn" class="outline-btn">Restore Text</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span id="statsSummary">0 requests blocked</span>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
