@@ -44,4 +44,27 @@ describe('DNR Rule Compilation & Precedence', () => {
     expect(siteRule).toBeDefined();
     expect(siteRule?.priority).toBe(210); // Site-scoped allow priority
   });
+
+  it('enforces maximum rule limit against chrome.declarativeNetRequest.MAX_NUMBER_OF_DYNAMIC_RULES', () => {
+    // Mock chrome.declarativeNetRequest
+    (globalThis as any).chrome = {
+      declarativeNetRequest: {
+        MAX_NUMBER_OF_DYNAMIC_RULES: 5
+      }
+    };
+
+    const settings = validateAndMigrateSettings(null);
+    settings.customRules = Array.from({ length: 10 }, (_, i) => ({
+      id: `${i}`,
+      pattern: `ad${i}.com`,
+      action: 'block',
+      createdAt: Date.now()
+    }));
+
+    const rules = compileSettingsToDNRRules(settings);
+    expect(rules.length).toBe(5);
+
+    // Clean up mock
+    delete (globalThis as any).chrome;
+  });
 });

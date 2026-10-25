@@ -33,4 +33,44 @@ describe('Translation Engine & Language Detector', () => {
     await manager.translateText('Text 3', 'en', 'es');
     expect(manager.getCacheSize()).toBe(2);
   });
+
+  it('supports ManualTranslationProvider returning original text', async () => {
+    const settings = {
+      ...DEFAULT_SETTINGS.translation,
+      provider: { type: 'manual' as const }
+    };
+    const manager = new TranslationManager(settings);
+
+    const res = await manager.translateText('Hello world', 'en', 'es');
+    expect(res.translatedText).toBe('Hello world');
+    expect(res.provider).toBe('manual');
+  });
+
+  it('supports CustomAPITranslationProvider with mocked fetch API', async () => {
+    const settings = {
+      ...DEFAULT_SETTINGS.translation,
+      provider: {
+        type: 'custom_api' as const,
+        endpoint: 'https://api.example.com/translate',
+        apiKey: 'test-key'
+      }
+    };
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+      return {
+        ok: true,
+        json: async () => ({ translatedText: 'Hola mundo' })
+      } as Response;
+    };
+
+    try {
+      const manager = new TranslationManager(settings);
+      const res = await manager.translateText('Hello world', 'en', 'es');
+      expect(res.translatedText).toBe('Hola mundo');
+      expect(res.provider).toBe('custom_api');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

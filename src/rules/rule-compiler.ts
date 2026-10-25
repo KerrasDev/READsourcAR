@@ -134,5 +134,12 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     });
   }
 
+  const dnr = typeof chrome !== 'undefined' ? (chrome.declarativeNetRequest as any) : null;
+  const maxRules = dnr?.MAX_NUMBER_OF_DYNAMIC_RULES || 5000;
+  if (rules.length > maxRules) {
+    console.warn(`Resource Guardian: Compiled rules (${rules.length}) exceeded dynamic rule limit (${maxRules}). Truncating lower-priority rules.`);
+    return rules.slice(0, maxRules);
+  }
+
   return rules;
 }

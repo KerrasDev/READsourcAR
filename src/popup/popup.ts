@@ -63,6 +63,14 @@ function updateUI(settings: AppSettings): void {
   if (targetLangSelect && settings.translation) {
     targetLangSelect.value = settings.translation.targetLang;
   }
+
+  // Update Stats Summary
+  StorageManager.getStats().then((stats) => {
+    const statsSummary = document.getElementById('statsSummary');
+    if (statsSummary) {
+      statsSummary.textContent = `${stats.totalBlocked} requests blocked`;
+    }
+  });
 }
 
 function setupListeners(): void {
@@ -114,6 +122,19 @@ function setupListeners(): void {
       if (tab?.id) {
         chrome.tabs.sendMessage(tab.id, {
           type: 'TRANSLATE_SELECTION',
+          targetLang: targetLangSelect?.value || 'en'
+        });
+      }
+    }
+  });
+
+  document.getElementById('translateMainContentBtn')?.addEventListener('click', async () => {
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'TRANSLATE_MAIN_CONTENT',
           targetLang: targetLangSelect?.value || 'en'
         });
       }
