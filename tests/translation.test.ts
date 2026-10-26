@@ -33,4 +33,15 @@ describe('Translation Engine & Language Detector', () => {
     await manager.translateText('Text 3', 'en', 'es');
     expect(manager.getCacheSize()).toBe(2);
   });
+
+  it('handles translation cancellation correctly via AbortSignal', async () => {
+    const manager = new TranslationManager(DEFAULT_SETTINGS.translation);
+    const controller = new AbortController();
+
+    const promise = manager.translateText('Cancel me', 'en', 'es', controller.signal);
+    controller.abort();
+
+    await expect(promise).rejects.toThrow('Translation aborted');
+    expect(manager.getCacheSize()).toBe(0); // Failed/aborted requests must not be cached
+  });
 });

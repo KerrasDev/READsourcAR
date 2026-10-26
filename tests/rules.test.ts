@@ -44,4 +44,32 @@ describe('DNR Rule Compilation & Precedence', () => {
     expect(siteRule).toBeDefined();
     expect(siteRule?.priority).toBe(210); // Site-scoped allow priority
   });
+
+  it('compiles category overrides and embedded site custom rules', () => {
+    const settings = validateAndMigrateSettings(null);
+    settings.siteExceptions['example.net'] = {
+      domain: 'example.net',
+      paused: false,
+      categoryOverrides: {
+        image: 'block',
+        thirdPartyScript: 'allow'
+      },
+      customRules: [
+        { id: 'c1', pattern: 'tracker.com', action: 'block', createdAt: Date.now() }
+      ]
+    };
+
+    const rules = compileSettingsToDNRRules(settings);
+    const imgOverride = rules.find((r) => r.condition.initiatorDomains?.includes('example.net') && r.condition.resourceTypes?.includes('image'));
+    expect(imgOverride).toBeDefined();
+    expect(imgOverride?.action.type).toBe('block');
+    expect(imgOverride?.priority).toBe(50);
+
+    const scriptAllow = rules.find((r) => r.condition.initiatorDomains?.includes('example.net') && r.priority === 60);
+    expect(scriptAllow).toBeDefined();
+
+    const customSiteRule = rules.find((r) => r.condition.urlFilter === '*tracker.com*' && r.condition.initiatorDomains?.includes('example.net'));
+    expect(customSiteRule).toBeDefined();
+    expect(customSiteRule?.priority).toBe(200);
+  });
 });

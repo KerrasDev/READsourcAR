@@ -83,7 +83,10 @@ export function normalizeUrl(input: string, baseUrl?: string): NormalizedUrl {
  */
 export function getRegistrableDomain(hostname: string): string {
   if (!hostname) return '';
-  const host = hostname.toLowerCase().trim();
+  let host = hostname.toLowerCase().trim();
+  if (host.endsWith('.')) {
+    host = host.slice(0, -1);
+  }
 
   // Handle IP addresses or localhost
   if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host === 'localhost' || host.endsWith('.local')) {
