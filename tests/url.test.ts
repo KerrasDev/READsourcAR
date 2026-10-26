@@ -31,4 +31,22 @@ describe('URL Normalization & Domain Extraction', () => {
     expect(isThirdParty('cdn.example.com', 'app.example.com')).toBe(false);
     expect(isThirdParty('tracker.ads.com', 'app.example.com')).toBe(true);
   });
+
+  it('handles trailing dots in hostnames', () => {
+    expect(getRegistrableDomain('example.com.')).toBe('example.com');
+    expect(getRegistrableDomain('sub.example.co.uk.')).toBe('example.co.uk');
+  });
+
+  it('resolves relative URLs given a base URL', () => {
+    const res = normalizeUrl('/path/to/resource.js', 'https://example.com/base/');
+    expect(res.isValid).toBe(true);
+    expect(res.raw).toBe('https://example.com/path/to/resource.js');
+    expect(res.registrableDomain).toBe('example.com');
+  });
+
+  it('handles invalid URLs gracefully', () => {
+    const res = normalizeUrl('not-a-valid-url');
+    expect(res.isValid).toBe(false);
+    expect(res.registrableDomain).toBe('');
+  });
 });

@@ -54,7 +54,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     }
   }
 
-  // 2. Custom Rules
+  // 2. Global Custom Rules
   for (const rule of settings.customRules) {
     const isAllow = rule.action === 'allow';
     const isSiteScoped = !!rule.siteScope && rule.siteScope !== '*';
@@ -79,6 +79,32 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
       action: { type: isAllow ? 'allow' : 'block' },
       condition
     });
+  }
+
+  // 2b. Site-specific Custom Rules embedded in siteExceptions
+  for (const [domain, exception] of Object.entries(settings.siteExceptions)) {
+    if (exception.paused || !exception.customRules) continue;
+
+    for (const rule of exception.customRules) {
+      const isAllow = rule.action === 'allow';
+      const priority = isAllow ? 210 : 200;
+
+      const condition: DNRRule['condition'] = {
+        urlFilter: rule.pattern.startsWith('*') ? rule.pattern : `*${rule.pattern}*`,
+        initiatorDomains: [domain]
+      };
+
+      if (rule.category && CATEGORY_RESOURCE_TYPES[rule.category]) {
+        condition.resourceTypes = CATEGORY_RESOURCE_TYPES[rule.category];
+      }
+
+      rules.push({
+        id: nextRuleId++,
+        priority,
+        action: { type: isAllow ? 'allow' : 'block' },
+        condition
+      });
+    }
   }
 
   // 3. Site Category Overrides - Priority 50
