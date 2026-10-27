@@ -67,12 +67,18 @@ export class ManualTranslationProvider implements TranslationProvider {
 export class CustomAPITranslationProvider implements TranslationProvider {
   name = 'custom_api';
   private config: TranslationProviderConfig;
+  private hasConsent: boolean;
 
-  constructor(config: TranslationProviderConfig) {
+  constructor(config: TranslationProviderConfig, hasConsent: boolean = false) {
     this.config = config;
+    this.hasConsent = hasConsent;
   }
 
   async translate(req: TranslationRequest): Promise<TranslationResponse> {
+    if (!this.hasConsent) {
+      throw new Error('User consent required for transmitting page content to external translation provider');
+    }
+
     if (!this.config.endpoint) {
       throw new Error('Custom API endpoint not configured');
     }
@@ -110,12 +116,15 @@ export class CustomAPITranslationProvider implements TranslationProvider {
   }
 }
 
-export function createTranslationProvider(config: TranslationProviderConfig): TranslationProvider {
+export function createTranslationProvider(
+  config: TranslationProviderConfig,
+  sendPageContentConsent: boolean = false
+): TranslationProvider {
   switch (config.type) {
     case 'manual':
       return new ManualTranslationProvider();
     case 'custom_api':
-      return new CustomAPITranslationProvider(config);
+      return new CustomAPITranslationProvider(config, sendPageContentConsent);
     case 'mock':
     default:
       return new MockTranslationProvider();

@@ -1,14 +1,18 @@
-import { detectLanguage } from '../translation/language-detector';
+import { detectLanguage, isRTL } from '../translation/language-detector';
 import { TranslationManager } from '../translation/translation-manager';
 import { StorageManager } from '../shared/settings';
 
 let translationManager: TranslationManager | null = null;
+let currentAbortController: AbortController | null = null;
 const originalNodeValues = new WeakMap<Node, string>();
+const originalDirAttributes = new WeakMap<HTMLElement, string | null>();
 
 async function getManager(): Promise<TranslationManager> {
+  const settings = await StorageManager.getSettings();
   if (!translationManager) {
-    const settings = await StorageManager.getSettings();
-    translationManager = new TranslationManager(settings.translation);
+    translationManager = new TranslationManager(settings.translation, settings.privacy.sendPageContentConsent);
+  } else {
+    translationManager.updateSettings(settings.translation, settings.privacy.sendPageContentConsent);
   }
   return translationManager;
 }
@@ -49,29 +53,42 @@ function getTranslatableTextNodes(root: Node): Text[] {
 }
 
 /**
- * Translates selected DOM element or main content area.
+ * Translates selected DOM element or main content area with cancellation and RTL layout handling.
  */
-export async function translateElement(element: HTMLElement, targetLang?: string): Promise<void> {
+export async function translateElement(element: HTMLElement, targetLang?: string, signal?: AbortSignal): Promise<void> {
   const manager = await getManager();
   const textNodes = getTranslatableTextNodes(element);
 
+  if (targetLang && isRTL(targetLang)) {
+    if (!originalDirAttributes.has(element)) {
+      originalDirAttributes.set(element, element.getAttribute('dir'));
+    }
+    element.setAttribute('dir', 'rtl');
+  }
+
   for (const node of textNodes) {
+    if (signal?.aborted) break;
+
     const originalText = node.nodeValue || '';
     if (!originalNodeValues.has(node)) {
       originalNodeValues.set(node, originalText);
     }
 
     try {
-      const res = await manager.translateText(originalText, 'auto', targetLang);
+      const res = await manager.translateText(originalText, 'auto', targetLang, signal);
+      if (signal?.aborted) break;
       node.nodeValue = res.translatedText;
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.message === 'Translation aborted' || signal?.aborted) {
+        break;
+      }
       console.error('Failed to translate node:', err);
     }
   }
 }
 
 /**
- * Restores original text for previously translated nodes in element.
+ * Restores original text and text direction for previously translated nodes/elements.
  */
 export function restoreOriginalText(element: HTMLElement): void {
   const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -79,6 +96,15 @@ export function restoreOriginalText(element: HTMLElement): void {
     const node = walk.currentNode as Text;
     if (originalNodeValues.has(node)) {
       node.nodeValue = originalNodeValues.get(node)!;
+    }
+  }
+
+  if (originalDirAttributes.has(element)) {
+    const origDir = originalDirAttributes.get(element);
+    if (origDir === null || origDir === undefined) {
+      element.removeAttribute('dir');
+    } else {
+      element.setAttribute('dir', origDir);
     }
   }
 }
@@ -95,6 +121,11 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     }
 
     if (message.type === 'TRANSLATE_SELECTION') {
+      if (currentAbortController) {
+        currentAbortController.abort();
+      }
+      currentAbortController = new AbortController();
+
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
@@ -102,7 +133,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         const parentElem = container.nodeType === Node.ELEMENT_NODE ? (container as HTMLElement) : container.parentElement;
 
         if (parentElem) {
-          translateElement(parentElem, message.targetLang).then(() => {
+          translateElement(parentElem, message.targetLang, currentAbortController.signal).then(() => {
             sendResponse({ success: true });
           });
           return true;
@@ -113,9 +144,14 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     }
 
     if (message.type === 'TRANSLATE_MAIN_CONTENT') {
+      if (currentAbortController) {
+        currentAbortController.abort();
+      }
+      currentAbortController = new AbortController();
+
       const main = document.querySelector('main') || document.querySelector('article') || document.body;
       if (main) {
-        translateElement(main as HTMLElement, message.targetLang).then(() => {
+        translateElement(main as HTMLElement, message.targetLang, currentAbortController.signal).then(() => {
           sendResponse({ success: true });
         });
         return true;
