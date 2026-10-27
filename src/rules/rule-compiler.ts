@@ -29,21 +29,43 @@ const CATEGORY_RESOURCE_TYPES: Record<ResourceCategory, string[]> = {
   popup: ['sub_frame']
 };
 
+export const MAX_DNR_DYNAMIC_RULES = 5000;
+
+export interface CompilationResult {
+  rules: DNRRule[];
+  overflow: boolean;
+  totalGenerated: number;
+}
+
 /**
- * Compiles extension AppSettings into chrome.declarativeNetRequest rules.
+ * Compiles extension AppSettings into chrome.declarativeNetRequest rules with precedence and safety limits.
  */
-export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
+export function compileSettingsToDNRRules(
+  settings: AppSettings,
+  maxRules: number = MAX_DNR_DYNAMIC_RULES
+): DNRRule[] {
+  const result = compileSettingsToDNRRulesDetailed(settings, maxRules);
+  return result.rules;
+}
+
+/**
+ * Detailed compilation function returning rules along with overflow state.
+ */
+export function compileSettingsToDNRRulesDetailed(
+  settings: AppSettings,
+  maxRules: number = MAX_DNR_DYNAMIC_RULES
+): CompilationResult {
   if (!settings.globalProtectionEnabled) {
-    return [];
+    return { rules: [], overflow: false, totalGenerated: 0 };
   }
 
-  const rules: DNRRule[] = [];
+  const allRules: DNRRule[] = [];
   let nextRuleId = 1;
 
-  // 1. Paused Sites - Priority 1000 (Highest)
+  // 1. Paused Sites (Safety Constraint / User Override) - Priority 1000
   for (const [domain, exception] of Object.entries(settings.siteExceptions)) {
     if (exception.paused && domain) {
-      rules.push({
+      allRules.push({
         id: nextRuleId++,
         priority: 1000,
         action: { type: 'allow' },
@@ -54,12 +76,18 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     }
   }
 
-  // 2. Custom Rules
+  // 2. Custom Rules (Explicit user rules)
+  // Precedence: Site Allow (300) > Site Block (200) > Global Allow (150) > Global Block (100)
   for (const rule of settings.customRules) {
     const isAllow = rule.action === 'allow';
     const isSiteScoped = !!rule.siteScope && rule.siteScope !== '*';
-    const basePriority = isSiteScoped ? 200 : 100;
-    const priority = isAllow ? basePriority + 10 : basePriority;
+    let priority: number;
+
+    if (isSiteScoped) {
+      priority = isAllow ? 300 : 200;
+    } else {
+      priority = isAllow ? 150 : 100;
+    }
 
     const condition: DNRRule['condition'] = {
       urlFilter: rule.pattern.startsWith('*') ? rule.pattern : `*${rule.pattern}*`
@@ -73,7 +101,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
       condition.resourceTypes = CATEGORY_RESOURCE_TYPES[rule.category];
     }
 
-    rules.push({
+    allRules.push({
       id: nextRuleId++,
       priority,
       action: { type: isAllow ? 'allow' : 'block' },
@@ -81,7 +109,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     });
   }
 
-  // 3. Site Category Overrides - Priority 50
+  // 3. Site Category Overrides - Priority 60 (Allow) / 50 (Block)
   for (const [domain, exception] of Object.entries(settings.siteExceptions)) {
     if (exception.paused) continue;
 
@@ -100,7 +128,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
           condition.domainType = 'thirdParty';
         }
 
-        rules.push({
+        allRules.push({
           id: nextRuleId++,
           priority: action === 'allow' ? 60 : 50,
           action: { type: action },
@@ -110,7 +138,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     }
   }
 
-  // 4. Global Category Rules - Priority 10
+  // 4. Global Category Rules - Priority 15 (Allow) / 10 (Block)
   for (const [catStr, policy] of Object.entries(settings.resourcePolicies)) {
     if (!policy.enabled) continue;
 
@@ -126,7 +154,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
       condition.domainType = 'thirdParty';
     }
 
-    rules.push({
+    allRules.push({
       id: nextRuleId++,
       priority: policy.action === 'allow' ? 15 : 10,
       action: { type: policy.action },
@@ -134,5 +162,12 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     });
   }
 
-  return rules;
+  const overflow = allRules.length > maxRules;
+  const rules = overflow ? allRules.slice(0, maxRules) : allRules;
+
+  return {
+    rules,
+    overflow,
+    totalGenerated: allRules.length
+  };
 }

@@ -170,3 +170,29 @@ body {
   color: var(--subtext-color);
   margin-top: 8px;
 }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.status-message {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--subtext-color);
+  min-height: 16px;
+}

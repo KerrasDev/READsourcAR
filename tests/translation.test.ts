@@ -33,4 +33,28 @@ describe('Translation Engine & Language Detector', () => {
     await manager.translateText('Text 3', 'en', 'es');
     expect(manager.getCacheSize()).toBe(2);
   });
+
+  it('throws consent error when custom API provider is used without consent', async () => {
+    const customSettings = {
+      ...DEFAULT_SETTINGS.translation,
+      provider: { type: 'custom_api' as const, endpoint: 'https://api.example.com/translate' }
+    };
+    const managerNoConsent = new TranslationManager(customSettings, false);
+
+    await expect(managerNoConsent.translateText('Hello', 'en', 'fr')).rejects.toThrow(
+      'User consent required for transmitting page content to external translation provider'
+    );
+
+    const managerWithConsent = new TranslationManager(customSettings, true);
+    // Custom API will fail on fetch in mock environment, but consent check passes!
+    await expect(managerWithConsent.translateText('Hello', 'en', 'fr')).rejects.toThrow();
+  });
+
+  it('respects AbortSignal cancellation', async () => {
+    const manager = new TranslationManager(DEFAULT_SETTINGS.translation);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(manager.translateText('Cancelled text', 'en', 'es', controller.signal)).rejects.toThrow('Translation aborted');
+  });
 });

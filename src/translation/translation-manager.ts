@@ -67,22 +67,31 @@ export class TranslationCache {
 export class TranslationManager {
   private cache: TranslationCache;
   private settings: TranslationSettings;
+  private sendPageContentConsent: boolean;
   private activeRequests = new Map<string, Promise<TranslationResponse>>();
 
-  constructor(settings: TranslationSettings) {
+  constructor(settings: TranslationSettings, sendPageContentConsent: boolean = false) {
     this.settings = settings;
+    this.sendPageContentConsent = sendPageContentConsent;
     this.cache = new TranslationCache(settings.maxCacheEntries, settings.cacheTTLMs);
   }
 
-  updateSettings(settings: TranslationSettings): void {
+  updateSettings(settings: TranslationSettings, sendPageContentConsent?: boolean): void {
     this.settings = settings;
+    if (typeof sendPageContentConsent === 'boolean') {
+      this.sendPageContentConsent = sendPageContentConsent;
+    }
     this.cache = new TranslationCache(settings.maxCacheEntries, settings.cacheTTLMs);
   }
 
   async translateText(text: string, sourceLang?: string, targetLang?: string, signal?: AbortSignal): Promise<TranslationResponse> {
+    if (signal?.aborted) {
+      throw new Error('Translation aborted');
+    }
+
     const src = sourceLang || this.settings.sourceLang;
     const tgt = targetLang || this.settings.targetLang;
-    const providerObj = createTranslationProvider(this.settings.provider);
+    const providerObj = createTranslationProvider(this.settings.provider, this.sendPageContentConsent);
 
     const cacheKey = TranslationCache.generateKey(text, src, tgt, providerObj.name);
 

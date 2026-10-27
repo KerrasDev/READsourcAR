@@ -101,8 +101,13 @@ function renderTranslationSettings(settings: AppSettings): void {
 
 function renderPrivacySettings(settings: AppSettings): void {
   const clearStatsCheckbox = document.getElementById('clearStatsOnRestart') as HTMLInputElement;
+  const consentCheckbox = document.getElementById('sendPageContentConsent') as HTMLInputElement;
+
   if (clearStatsCheckbox) {
     clearStatsCheckbox.checked = settings.privacy.clearStatsOnRestart;
+  }
+  if (consentCheckbox) {
+    consentCheckbox.checked = settings.privacy.sendPageContentConsent;
   }
 }
 
@@ -148,6 +153,13 @@ function setupListeners(): void {
     const input = e.target as HTMLInputElement;
     const settings = await StorageManager.getSettings();
     settings.translation.provider.apiKey = input.value.trim();
+    await StorageManager.saveSettings(settings);
+  });
+
+  document.getElementById('sendPageContentConsent')?.addEventListener('change', async (e) => {
+    const checkbox = e.target as HTMLInputElement;
+    const settings = await StorageManager.getSettings();
+    settings.privacy.sendPageContentConsent = checkbox.checked;
     await StorageManager.saveSettings(settings);
   });
 

@@ -1,14 +1,14 @@
 import { StorageManager } from '../shared/settings';
-import { compileSettingsToDNRRules } from '../rules/rule-compiler';
-import { AppSettings, ResourceStats } from '../shared/types';
+import { compileSettingsToDNRRulesDetailed } from '../rules/rule-compiler';
+import { AppSettings, ResourceCategory, ResourceStats } from '../shared/types';
 
 /**
  * Service Worker Event Handler & DNR Coordinator
  */
 
-export async function updateDNRRules(): Promise<void> {
+export async function updateDNRRules(): Promise<{ ruleCount: number; overflow: boolean }> {
   const settings = await StorageManager.getSettings();
-  const rules = compileSettingsToDNRRules(settings);
+  const compilation = compileSettingsToDNRRulesDetailed(settings);
 
   if (typeof chrome !== 'undefined' && chrome.declarativeNetRequest) {
     try {
@@ -17,13 +17,51 @@ export async function updateDNRRules(): Promise<void> {
 
       await chrome.declarativeNetRequest.updateDynamicRules({
         removeRuleIds,
-        addRules: rules as unknown as chrome.declarativeNetRequest.Rule[]
+        addRules: compilation.rules as unknown as chrome.declarativeNetRequest.Rule[]
       });
-      console.log(`Updated declarativeNetRequest with ${rules.length} active rules.`);
+      if (compilation.overflow) {
+        console.warn(
+          `DNR Rule Limit Warning: Generated ${compilation.totalGenerated} rules, which exceeds the limit. Capped at ${compilation.rules.length} rules.`
+        );
+      } else {
+        console.log(`Updated declarativeNetRequest with ${compilation.rules.length} active rules.`);
+      }
     } catch (err) {
       console.error('Failed to update DNR rules:', err);
     }
   }
+
+  return { ruleCount: compilation.rules.length, overflow: compilation.overflow };
+}
+
+// Optional DNR debug rule match handler for development / unpacked extension statistics
+if (typeof chrome !== 'undefined' && chrome.declarativeNetRequest?.onRuleMatchedDebug) {
+  chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (info) => {
+    const settings = await StorageManager.getSettings();
+    if (!settings.privacy.collectStats) return;
+
+    const ruleAction = (info.rule as any).action?.type || 'block';
+    if (ruleAction === 'block') {
+      const stats = await StorageManager.getStats();
+      stats.totalBlocked += 1;
+      stats.totalEvaluated += 1;
+
+      // Infer category from resourceType if available
+      const typeMap: Record<string, ResourceCategory> = {
+        script: 'script',
+        sub_frame: 'iframe',
+        image: 'image',
+        media: 'media',
+        stylesheet: 'stylesheet',
+        font: 'font'
+      };
+      const cat = typeMap[info.request.type] || 'script';
+      stats.blockedByCategory[cat] = (stats.blockedByCategory[cat] || 0) + 1;
+      stats.lastUpdated = Date.now();
+
+      await StorageManager.saveStats(stats);
+    }
+  });
 }
 
 // Service worker listeners initialization

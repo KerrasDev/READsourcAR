@@ -6,6 +6,7 @@ let currentDomain = '';
 
 async function initPopup(): Promise<void> {
   const settings = await StorageManager.getSettings();
+  const stats = await StorageManager.getStats();
 
   // Fetch active tab
   if (typeof chrome !== 'undefined' && chrome.tabs) {
@@ -23,7 +24,15 @@ async function initPopup(): Promise<void> {
   }
 
   updateUI(settings);
+  updateStatsUI(stats.totalBlocked);
   setupListeners();
+}
+
+function updateStatsUI(totalBlocked: number): void {
+  const summaryEl = document.getElementById('statsSummary');
+  if (summaryEl) {
+    summaryEl.textContent = `${totalBlocked} requests blocked`;
+  }
 }
 
 function updateUI(settings: AppSettings): void {
@@ -107,15 +116,33 @@ function setupListeners(): void {
     await StorageManager.saveSettings(settings);
   });
 
+  const setStatusMessage = (msg: string) => {
+    const statusEl = document.getElementById('translationStatus');
+    if (statusEl) statusEl.textContent = msg;
+  };
+
   document.getElementById('translateSelectionBtn')?.addEventListener('click', async () => {
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
       if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'TRANSLATE_SELECTION',
-          targetLang: targetLangSelect?.value || 'en'
-        });
+        setStatusMessage('Translating selection...');
+        chrome.tabs.sendMessage(
+          tab.id,
+          {
+            type: 'TRANSLATE_SELECTION',
+            targetLang: targetLangSelect?.value || 'en'
+          },
+          (res) => {
+            if (res && res.success) {
+              setStatusMessage('Selection translated.');
+            } else if (res && res.error) {
+              setStatusMessage(`Error: ${res.error}`);
+            } else {
+              setStatusMessage('Translation complete.');
+            }
+          }
+        );
       }
     }
   });
@@ -124,7 +151,10 @@ function setupListeners(): void {
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { type: 'RESTORE_ORIGINAL' });
+        setStatusMessage('Restoring original text...');
+        chrome.tabs.sendMessage(tab.id, { type: 'RESTORE_ORIGINAL' }, () => {
+          setStatusMessage('Original text restored.');
+        });
       }
     }
   });

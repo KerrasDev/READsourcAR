@@ -70,7 +70,8 @@
   <div class="card translation-card">
     <span class="card-title">Translation Quick Action</span>
     <div class="translation-controls">
-      <select id="targetLangSelect">
+      <label for="targetLangSelect" class="sr-only">Target Language</label>
+      <select id="targetLangSelect" aria-label="Select Target Language">
         <option value="en">English</option>
         <option value="es">Spanish</option>
         <option value="fr">French</option>
@@ -79,9 +80,10 @@
         <option value="zh">Chinese</option>
       </select>
       <div class="btn-group">
-        <button id="translateSelectionBtn" class="action-btn">Translate Selection</button>
-        <button id="restoreTextBtn" class="outline-btn">Restore Text</button>
+        <button id="translateSelectionBtn" class="action-btn" aria-label="Translate current text selection">Translate Selection</button>
+        <button id="restoreTextBtn" class="outline-btn" aria-label="Restore original page text">Restore Text</button>
       </div>
+      <div id="translationStatus" class="status-message" aria-live="polite"></div>
     </div>
   </div>
 

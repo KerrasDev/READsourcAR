@@ -34,11 +34,17 @@ tests/        - Unit, rule compilation, translation, and DOM JSDOM tests
 ## DeclarativeNetRequest & Request Blocking
 
 Resource Guardian uses Chrome's native `declarativeNetRequest` (DNR) dynamic rules to filter network requests **before they download**:
-- **Priority 1000:** Paused domains (User domain exceptions) -> ALLOW
-- **Priority 200-210:** Site-scoped custom rules (Allow / Block)
-- **Priority 100-110:** Global custom rules (Allow / Block)
-- **Priority 50-60:** Per-site category overrides
-- **Priority 10-15:** Global category default policies (e.g., block third-party scripts)
+- **Priority 1000:** Paused domains (User domain safety overrides) -> ALLOW
+- **Priority 300:** Custom Site-Scoped Allow Rules
+- **Priority 200:** Custom Site-Scoped Block Rules
+- **Priority 150:** Custom Global Allow Rules
+- **Priority 100:** Custom Global Block Rules
+- **Priority 60:** Per-site Category Allow Overrides
+- **Priority 50:** Per-site Category Block Overrides
+- **Priority 15:** Global Category Allow Policies
+- **Priority 10:** Global Category Block Policies
+
+Dynamic rules are compiled with hard safety bounds capped at Chrome's limit (`MAX_NUMBER_OF_DYNAMIC_AND_SESSION_RULES = 5000`) with overflow detection and logging.
 
 No heavy `MutationObserver` loops or DOM deletion hacks are used for network request blocking.
 
@@ -49,6 +55,9 @@ No heavy `MutationObserver` loops or DOM deletion hacks are used for network req
 - **Bounded Cache:** LRU cache capped at 500 entries with a 24-hour TTL to avoid unbounded memory growth.
 - **Request Deduplication:** Duplicate in-flight requests for the same text and language pair return the active promise without sending extra network calls.
 - **Safe DOM Extraction:** Skips `<code>`, `<pre>`, `<script>`, `<style>`, `<input>`, and `<textarea>` elements, protecting code blocks, inputs, and password fields. Original text nodes are stored using a `WeakMap` for instant, non-destructive restoration.
+- **Cancellation & Concurrency:** Supports `AbortController` cancellation for in-flight translation jobs on user action or selection changes.
+- **RTL Support:** Automatically applies `dir="rtl"` to container elements when translating to Right-to-Left target languages (e.g., Arabic `ar`, Hebrew `he`), and restores original text direction upon reset.
+- **Privacy & Consent:** Enforces explicit user consent (`sendPageContentConsent`) before transmitting text to custom external API providers.
 
 ---
 

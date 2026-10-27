@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compileSettingsToDNRRules } from '../src/rules/rule-compiler';
+import { compileSettingsToDNRRules, compileSettingsToDNRRulesDetailed } from '../src/rules/rule-compiler';
 import { validateAndMigrateSettings, DEFAULT_SETTINGS } from '../src/shared/settings';
 
 describe('DNR Rule Compilation & Precedence', () => {
@@ -32,16 +32,43 @@ describe('DNR Rule Compilation & Precedence', () => {
     expect(pausedRule?.condition.initiatorDomains).toContain('example.org');
   });
 
-  it('compiles custom rules with appropriate priorities', () => {
+  it('compiles custom rules with appropriate precedence priorities', () => {
     const settings = validateAndMigrateSettings(null);
     settings.customRules = [
-      { id: '1', pattern: 'ads.com', action: 'block', createdAt: Date.now() },
-      { id: '2', pattern: 'trusted.com', action: 'allow', siteScope: 'example.org', createdAt: Date.now() }
+      { id: '1', pattern: 'global-block.com', action: 'block', createdAt: Date.now() },
+      { id: '2', pattern: 'global-allow.com', action: 'allow', createdAt: Date.now() },
+      { id: '3', pattern: 'site-block.com', action: 'block', siteScope: 'example.org', createdAt: Date.now() },
+      { id: '4', pattern: 'site-allow.com', action: 'allow', siteScope: 'example.org', createdAt: Date.now() }
     ];
 
     const rules = compileSettingsToDNRRules(settings);
-    const siteRule = rules.find((r) => r.condition.initiatorDomains?.includes('example.org'));
-    expect(siteRule).toBeDefined();
-    expect(siteRule?.priority).toBe(210); // Site-scoped allow priority
+
+    const siteAllow = rules.find((r) => r.condition.urlFilter?.includes('site-allow.com'));
+    const siteBlock = rules.find((r) => r.condition.urlFilter?.includes('site-block.com'));
+    const globalAllow = rules.find((r) => r.condition.urlFilter?.includes('global-allow.com'));
+    const globalBlock = rules.find((r) => r.condition.urlFilter?.includes('global-block.com'));
+
+    expect(siteAllow?.priority).toBe(300);
+    expect(siteBlock?.priority).toBe(200);
+    expect(globalAllow?.priority).toBe(150);
+    expect(globalBlock?.priority).toBe(100);
+  });
+
+  it('handles rule limits and indicates overflow', () => {
+    const settings = validateAndMigrateSettings(null);
+
+    // Create 15 custom rules
+    settings.customRules = Array.from({ length: 15 }, (_, i) => ({
+      id: `rule-${i}`,
+      pattern: `tracker-${i}.com`,
+      action: 'block',
+      createdAt: Date.now()
+    }));
+
+    // Limit to max 5 rules
+    const result = compileSettingsToDNRRulesDetailed(settings, 5);
+    expect(result.overflow).toBe(true);
+    expect(result.rules.length).toBe(5);
+    expect(result.totalGenerated).toBeGreaterThan(5);
   });
 });
