@@ -48,7 +48,15 @@ No heavy `MutationObserver` loops or DOM deletion hacks are used for network req
 
 - **Bounded Cache:** LRU cache capped at 500 entries with a 24-hour TTL to avoid unbounded memory growth.
 - **Request Deduplication:** Duplicate in-flight requests for the same text and language pair return the active promise without sending extra network calls.
-- **Safe DOM Extraction:** Skips `<code>`, `<pre>`, `<script>`, `<style>`, `<input>`, and `<textarea>` elements, protecting code blocks, inputs, and password fields. Original text nodes are stored using a `WeakMap` for instant, non-destructive restoration.
+- **Safe DOM Extraction & RTL Support:** Skips `<code>`, `<pre>`, `<script>`, `<style>`, `<input>`, and `<textarea>` elements, protecting code blocks, inputs, and password fields. Sets `dir="rtl"` or `dir="ltr"` on element parents when translating RTL languages (e.g., Arabic). Original text nodes are stored using a `WeakMap` for instant, non-destructive restoration.
+- **User Action Triggers:** Supports translating user selection or main content area (`<main>`, `<article>`, or `<body>`).
+
+---
+
+## User Interface & Features
+
+- **Popup Interface:** Allows toggling global protection, pausing protection per domain, configuring resource category rules, selecting target translation languages, triggering selection or main content translation, restoring original text, and viewing total blocked request statistics.
+- **Options Interface:** Provides configuration for resource guard policies, site exceptions, custom pattern rules (allow/block with site scopes), translation mode and providers (Mock, Manual, or Custom REST API), privacy settings, and settings import/export/reset.
 
 ---
 

@@ -6,6 +6,7 @@ async function initOptions(): Promise<void> {
   const settings = await StorageManager.getSettings();
   renderPolicies(settings);
   renderExceptions(settings);
+  renderCustomRules(settings);
   renderTranslationSettings(settings);
   renderPrivacySettings(settings);
   setupListeners();
@@ -78,6 +79,35 @@ function renderExceptions(settings: AppSettings): void {
   }
 }
 
+function renderCustomRules(settings: AppSettings): void {
+  const list = document.getElementById('customRulesList');
+  if (!list) return;
+
+  list.innerHTML = '';
+  for (const rule of settings.customRules) {
+    const li = document.createElement('li');
+    li.className = 'exception-item';
+
+    const scopeStr = rule.siteScope ? ` [Scope: ${rule.siteScope}]` : ' [Global]';
+    const span = document.createElement('span');
+    span.textContent = `${rule.action.toUpperCase()}: ${rule.pattern}${scopeStr}`;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'danger-btn';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', async () => {
+      const curr = await StorageManager.getSettings();
+      curr.customRules = curr.customRules.filter((r) => r.id !== rule.id);
+      await StorageManager.saveSettings(curr);
+      renderCustomRules(curr);
+    });
+
+    li.appendChild(span);
+    li.appendChild(removeBtn);
+    list.appendChild(li);
+  }
+}
+
 function renderTranslationSettings(settings: AppSettings): void {
   const modeSelect = document.getElementById('transMode') as HTMLSelectElement;
   const providerSelect = document.getElementById('providerType') as HTMLSelectElement;
@@ -120,6 +150,34 @@ function setupListeners(): void {
 
     input.value = '';
     renderExceptions(settings);
+  });
+
+  document.getElementById('addCustomRuleBtn')?.addEventListener('click', async () => {
+    const patternInput = document.getElementById('newRulePattern') as HTMLInputElement;
+    const actionSelect = document.getElementById('newRuleAction') as HTMLSelectElement;
+    const scopeInput = document.getElementById('newRuleSiteScope') as HTMLInputElement;
+
+    if (!patternInput || !patternInput.value.trim()) return;
+
+    const pattern = patternInput.value.trim();
+    const action = (actionSelect?.value as 'allow' | 'block') || 'block';
+    const siteScope = scopeInput?.value.trim() || undefined;
+
+    const settings = await StorageManager.getSettings();
+    const newRule = {
+      id: Date.now().toString(),
+      pattern,
+      action,
+      siteScope,
+      createdAt: Date.now()
+    };
+
+    settings.customRules.push(newRule);
+    await StorageManager.saveSettings(settings);
+
+    patternInput.value = '';
+    if (scopeInput) scopeInput.value = '';
+    renderCustomRules(settings);
   });
 
   document.getElementById('transMode')?.addEventListener('change', async (e) => {

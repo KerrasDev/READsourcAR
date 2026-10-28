@@ -6,6 +6,7 @@ let currentDomain = '';
 
 async function initPopup(): Promise<void> {
   const settings = await StorageManager.getSettings();
+  const stats = await StorageManager.getStats();
 
   // Fetch active tab
   if (typeof chrome !== 'undefined' && chrome.tabs) {
@@ -22,11 +23,11 @@ async function initPopup(): Promise<void> {
     }
   }
 
-  updateUI(settings);
+  updateUI(settings, stats.totalBlocked);
   setupListeners();
 }
 
-function updateUI(settings: AppSettings): void {
+function updateUI(settings: AppSettings, totalBlocked = 0): void {
   const globalStatus = document.getElementById('globalStatus');
   const toggleProtectionBtn = document.getElementById('toggleProtectionBtn');
 
@@ -62,6 +63,12 @@ function updateUI(settings: AppSettings): void {
   const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
   if (targetLangSelect && settings.translation) {
     targetLangSelect.value = settings.translation.targetLang;
+  }
+
+  // Stats Summary
+  const statsSummary = document.getElementById('statsSummary');
+  if (statsSummary) {
+    statsSummary.textContent = `${totalBlocked} requests blocked`;
   }
 }
 
@@ -114,6 +121,19 @@ function setupListeners(): void {
       if (tab?.id) {
         chrome.tabs.sendMessage(tab.id, {
           type: 'TRANSLATE_SELECTION',
+          targetLang: targetLangSelect?.value || 'en'
+        });
+      }
+    }
+  });
+
+  document.getElementById('translateMainBtn')?.addEventListener('click', async () => {
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'TRANSLATE_MAIN_CONTENT',
           targetLang: targetLangSelect?.value || 'en'
         });
       }

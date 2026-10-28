@@ -1,4 +1,4 @@
-import { detectLanguage } from '../translation/language-detector';
+import { detectLanguage, isRTL } from '../translation/language-detector';
 import { TranslationManager } from '../translation/translation-manager';
 import { StorageManager } from '../shared/settings';
 
@@ -54,6 +54,15 @@ function getTranslatableTextNodes(root: Node): Text[] {
 export async function translateElement(element: HTMLElement, targetLang?: string): Promise<void> {
   const manager = await getManager();
   const textNodes = getTranslatableTextNodes(element);
+
+  // Set RTL or LTR text direction on container if target language is specified
+  if (targetLang) {
+    if (isRTL(targetLang)) {
+      element.setAttribute('dir', 'rtl');
+    } else {
+      element.setAttribute('dir', 'ltr');
+    }
+  }
 
   for (const node of textNodes) {
     const originalText = node.nodeValue || '';

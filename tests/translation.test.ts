@@ -33,4 +33,12 @@ describe('Translation Engine & Language Detector', () => {
     await manager.translateText('Text 3', 'en', 'es');
     expect(manager.getCacheSize()).toBe(2);
   });
+
+  it('supports cancellation via AbortSignal', async () => {
+    const manager = new TranslationManager(DEFAULT_SETTINGS.translation);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(manager.translateText('Text to abort', 'en', 'fr', controller.signal)).rejects.toThrow('Translation aborted');
+  });
 });
