@@ -34,6 +34,24 @@
       </ul>
     </section>
 
+    <!-- Custom Filter Rules -->
+    <section class="section card">
+      <h2>Custom Filter Rules</h2>
+      <p class="section-desc">Define custom pattern-based blocking or allow rules.</p>
+      <div class="add-rule-form">
+        <input type="text" id="newRulePattern" placeholder="Pattern (e.g. ads.com or *tracker*)">
+        <select id="newRuleAction">
+          <option value="block">Block</option>
+          <option value="allow">Allow</option>
+        </select>
+        <input type="text" id="newRuleSiteScope" placeholder="Site Scope (optional, e.g. example.org)">
+        <button id="addCustomRuleBtn" class="primary-btn">Add Rule</button>
+      </div>
+      <ul id="customRulesList" class="exceptions-list">
+        <!-- Dynamically rendered -->
+      </ul>
+    </section>
+
     <!-- Translation Configuration -->
     <section class="section card">
       <h2>Translation Optimizer</h2>

@@ -27,6 +27,15 @@ describe('DOM Translation & Node Restoration', () => {
     expect(p.textContent).toBe('[ES] This is a test paragraph.');
     expect(code.textContent).toBe('const x = 10;'); // Preserved
     expect(input.value).toBe('Input field should not be translated'); // Preserved
+    expect(container.getAttribute('dir')).toBe('ltr');
+  });
+
+  it('sets dir="rtl" on container when translating to Arabic', async () => {
+    const container = document.getElementById('test-container')!;
+    await translateElement(container, 'ar');
+
+    expect(container.getAttribute('dir')).toBe('rtl');
+    expect(container.querySelector('h1')!.textContent).toBe('[AR] Welcome Page');
   });
 
   it('restores original text node values cleanly', async () => {
