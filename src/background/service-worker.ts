@@ -6,16 +6,19 @@ import { AppSettings, ResourceStats } from '../shared/types';
  * Service Worker Event Handler & DNR Coordinator
  */
 
+// Compatibility API accessor supporting Chrome / WebExtension browser global
+const browserAPI = typeof chrome !== 'undefined' ? chrome : (typeof window !== 'undefined' ? (window as any).browser : null);
+
 export async function updateDNRRules(): Promise<void> {
   const settings = await StorageManager.getSettings();
   const rules = compileSettingsToDNRRules(settings);
 
-  if (typeof chrome !== 'undefined' && chrome.declarativeNetRequest) {
+  if (browserAPI && browserAPI.declarativeNetRequest) {
     try {
-      const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
-      const removeRuleIds = existingRules.map((r) => r.id);
+      const existingRules = await browserAPI.declarativeNetRequest.getDynamicRules();
+      const removeRuleIds = existingRules.map((r: { id: number }) => r.id);
 
-      await chrome.declarativeNetRequest.updateDynamicRules({
+      await browserAPI.declarativeNetRequest.updateDynamicRules({
         removeRuleIds,
         addRules: rules as unknown as chrome.declarativeNetRequest.Rule[]
       });
@@ -23,6 +26,8 @@ export async function updateDNRRules(): Promise<void> {
     } catch (err) {
       console.error('Failed to update DNR rules:', err);
     }
+  } else {
+    console.warn('declarativeNetRequest API not available in current environment.');
   }
 }
 

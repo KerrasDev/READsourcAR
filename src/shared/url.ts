@@ -83,7 +83,25 @@ export function normalizeUrl(input: string, baseUrl?: string): NormalizedUrl {
  */
 export function getRegistrableDomain(hostname: string): string {
   if (!hostname) return '';
-  const host = hostname.toLowerCase().trim();
+  // Strip default ports or paths if accidentally passed
+  let cleanHost = hostname.trim();
+  if (cleanHost.includes('/')) {
+    cleanHost = cleanHost.split('/')[0];
+  }
+
+  // Handle bracketed IPv6 address e.g. [2001:db8::1]:8080
+  if (cleanHost.startsWith('[')) {
+    const closingBracket = cleanHost.indexOf(']');
+    if (closingBracket !== -1) {
+      return cleanHost.slice(0, closingBracket + 1).toLowerCase();
+    }
+  }
+
+  if (cleanHost.includes(':')) {
+    cleanHost = cleanHost.split(':')[0];
+  }
+
+  const host = cleanHost.toLowerCase();
 
   // Handle IP addresses or localhost
   if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host === 'localhost' || host.endsWith('.local')) {

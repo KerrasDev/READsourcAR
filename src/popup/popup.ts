@@ -120,6 +120,19 @@ function setupListeners(): void {
     }
   });
 
+  document.getElementById('translateMainBtn')?.addEventListener('click', async () => {
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'TRANSLATE_MAIN_CONTENT',
+          targetLang: targetLangSelect?.value || 'en'
+        });
+      }
+    }
+  });
+
   document.getElementById('restoreTextBtn')?.addEventListener('click', async () => {
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

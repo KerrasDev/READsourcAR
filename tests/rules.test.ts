@@ -44,4 +44,21 @@ describe('DNR Rule Compilation & Precedence', () => {
     expect(siteRule).toBeDefined();
     expect(siteRule?.priority).toBe(210); // Site-scoped allow priority
   });
+
+  it('truncates compiled rules if exceeding 5000 max dynamic rules', () => {
+    const settings = validateAndMigrateSettings(null);
+    const customRules = [];
+    for (let i = 0; i < 6000; i++) {
+      customRules.push({
+        id: `rule-${i}`,
+        pattern: `tracker${i}.com`,
+        action: 'block' as const,
+        createdAt: Date.now()
+      });
+    }
+    settings.customRules = customRules;
+
+    const rules = compileSettingsToDNRRules(settings);
+    expect(rules.length).toBe(5000);
+  });
 });
