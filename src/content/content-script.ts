@@ -1,9 +1,10 @@
-import { detectLanguage } from '../translation/language-detector';
+import { detectLanguage, isRTL } from '../translation/language-detector';
 import { TranslationManager } from '../translation/translation-manager';
 import { StorageManager } from '../shared/settings';
 
 let translationManager: TranslationManager | null = null;
 const originalNodeValues = new WeakMap<Node, string>();
+const originalParentDir = new WeakMap<HTMLElement, string>();
 
 async function getManager(): Promise<TranslationManager> {
   if (!translationManager) {
@@ -55,6 +56,14 @@ export async function translateElement(element: HTMLElement, targetLang?: string
   const manager = await getManager();
   const textNodes = getTranslatableTextNodes(element);
 
+  // Set text direction if target language is RTL (e.g. Arabic)
+  if (targetLang && isRTL(targetLang)) {
+    if (!originalParentDir.has(element)) {
+      originalParentDir.set(element, element.getAttribute('dir') || '');
+    }
+    element.setAttribute('dir', 'rtl');
+  }
+
   for (const node of textNodes) {
     const originalText = node.nodeValue || '';
     if (!originalNodeValues.has(node)) {
@@ -64,6 +73,12 @@ export async function translateElement(element: HTMLElement, targetLang?: string
     try {
       const res = await manager.translateText(originalText, 'auto', targetLang);
       node.nodeValue = res.translatedText;
+      if (node.parentElement && targetLang && isRTL(targetLang)) {
+        if (!originalParentDir.has(node.parentElement)) {
+          originalParentDir.set(node.parentElement, node.parentElement.getAttribute('dir') || '');
+        }
+        node.parentElement.setAttribute('dir', 'rtl');
+      }
     } catch (err) {
       console.error('Failed to translate node:', err);
     }
@@ -79,6 +94,22 @@ export function restoreOriginalText(element: HTMLElement): void {
     const node = walk.currentNode as Text;
     if (originalNodeValues.has(node)) {
       node.nodeValue = originalNodeValues.get(node)!;
+    }
+    if (node.parentElement && originalParentDir.has(node.parentElement)) {
+      const origDir = originalParentDir.get(node.parentElement)!;
+      if (origDir) {
+        node.parentElement.setAttribute('dir', origDir);
+      } else {
+        node.parentElement.removeAttribute('dir');
+      }
+    }
+  }
+  if (originalParentDir.has(element)) {
+    const origDir = originalParentDir.get(element)!;
+    if (origDir) {
+      element.setAttribute('dir', origDir);
+    } else {
+      element.removeAttribute('dir');
     }
   }
 }

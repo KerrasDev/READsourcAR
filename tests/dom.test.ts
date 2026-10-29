@@ -40,4 +40,15 @@ describe('DOM Translation & Node Restoration', () => {
     expect(container.querySelector('h1')!.textContent).toBe('Welcome Page');
     expect(container.querySelector('p')!.textContent).toBe('This is a test paragraph.');
   });
+
+  it('sets dir="rtl" for RTL languages like Arabic and restores it', async () => {
+    const container = document.getElementById('test-container')!;
+    await translateElement(container, 'ar');
+
+    expect(container.getAttribute('dir')).toBe('rtl');
+
+    restoreOriginalText(container);
+
+    expect(container.hasAttribute('dir')).toBe(false);
+  });
 });
