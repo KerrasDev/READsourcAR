@@ -125,39 +125,33 @@ export function validateAndMigrateSettings(input: any): AppSettings {
 /**
  * Storage Abstraction Layer for Chrome Extension Local Storage
  */
+import { ExtensionBrowser } from './browser';
+
 export const StorageManager = {
   async getSettings(): Promise<AppSettings> {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      return new Promise((resolve) => {
-        chrome.storage.local.get(['settings'], (res) => {
-          resolve(validateAndMigrateSettings(res.settings));
-        });
-      });
-    } else {
-      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('rg_settings') : null;
-      return validateAndMigrateSettings(saved ? JSON.parse(saved) : null);
+    const stored = await ExtensionBrowser.getStorage('settings');
+    if (stored !== null) {
+      return validateAndMigrateSettings(stored);
     }
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('rg_settings') : null;
+    return validateAndMigrateSettings(saved ? JSON.parse(saved) : null);
   },
 
   async saveSettings(settings: AppSettings): Promise<void> {
     const validated = validateAndMigrateSettings(settings);
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      return new Promise((resolve) => {
-        chrome.storage.local.set({ settings: validated }, () => resolve());
-      });
+    if (ExtensionBrowser.isAvailable()) {
+      await ExtensionBrowser.setStorage('settings', validated);
     } else if (typeof localStorage !== 'undefined') {
       localStorage.setItem('rg_settings', JSON.stringify(validated));
     }
   },
 
   async getStats(): Promise<ResourceStats> {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      return new Promise((resolve) => {
-        chrome.storage.local.get(['stats'], (res) => {
-          resolve(res.stats || DEFAULT_STATS);
-        });
-      });
-    } else if (typeof localStorage !== 'undefined') {
+    const stored = await ExtensionBrowser.getStorage('stats');
+    if (stored !== null) {
+      return stored as ResourceStats;
+    }
+    if (typeof localStorage !== 'undefined') {
       const saved = localStorage.getItem('rg_stats');
       return saved ? JSON.parse(saved) : DEFAULT_STATS;
     }
@@ -165,10 +159,8 @@ export const StorageManager = {
   },
 
   async saveStats(stats: ResourceStats): Promise<void> {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      return new Promise((resolve) => {
-        chrome.storage.local.set({ stats }, () => resolve());
-      });
+    if (ExtensionBrowser.isAvailable()) {
+      await ExtensionBrowser.setStorage('stats', stats);
     } else if (typeof localStorage !== 'undefined') {
       localStorage.setItem('rg_stats', JSON.stringify(stats));
     }

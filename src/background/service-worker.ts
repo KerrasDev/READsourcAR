@@ -65,6 +65,22 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     });
   }
 
+  // Listen for declarativeNetRequest rule execution / matching events if supported for stats
+  if (chrome.declarativeNetRequest && (chrome.declarativeNetRequest as any).onRuleMatchedDebug) {
+    (chrome.declarativeNetRequest as any).onRuleMatchedDebug.addListener(async (info: any) => {
+      const settings = await StorageManager.getSettings();
+      if (!settings.privacy.collectStats) return;
+
+      const stats = await StorageManager.getStats();
+      stats.totalEvaluated++;
+      if (info.rule.action && info.rule.action.type === 'block') {
+        stats.totalBlocked++;
+      }
+      stats.lastUpdated = Date.now();
+      await StorageManager.saveStats(stats);
+    });
+  }
+
   // Handle messages from UI or content scripts
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'GET_SETTINGS') {
