@@ -1,25 +1,29 @@
 import { StorageManager } from '../shared/settings';
 import { getRegistrableDomain } from '../shared/url';
 import { AppSettings, ResourceCategory } from '../shared/types';
+import { ExtensionBrowser } from '../shared/browser';
 
 let currentDomain = '';
 
 async function initPopup(): Promise<void> {
   const settings = await StorageManager.getSettings();
+  const activeTab = await ExtensionBrowser.getActiveTab();
 
-  // Fetch active tab
-  if (typeof chrome !== 'undefined' && chrome.tabs) {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab && tab.url) {
-      try {
-        const url = new URL(tab.url);
-        currentDomain = getRegistrableDomain(url.hostname);
-        const domainBadge = document.getElementById('currentDomain');
-        if (domainBadge) domainBadge.textContent = currentDomain || 'N/A';
-      } catch {
-        currentDomain = '';
-      }
+  if (activeTab && activeTab.url) {
+    try {
+      const url = new URL(activeTab.url);
+      currentDomain = getRegistrableDomain(url.hostname);
+      const domainBadge = document.getElementById('currentDomain');
+      if (domainBadge) domainBadge.textContent = currentDomain || 'N/A';
+    } catch {
+      currentDomain = '';
     }
+  }
+
+  const stats = await StorageManager.getStats();
+  const statsSummary = document.getElementById('statsSummary');
+  if (statsSummary) {
+    statsSummary.textContent = `${stats.totalBlocked} requests blocked`;
   }
 
   updateUI(settings);
@@ -114,6 +118,19 @@ function setupListeners(): void {
       if (tab?.id) {
         chrome.tabs.sendMessage(tab.id, {
           type: 'TRANSLATE_SELECTION',
+          targetLang: targetLangSelect?.value || 'en'
+        });
+      }
+    }
+  });
+
+  document.getElementById('translateMainBtn')?.addEventListener('click', async () => {
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'TRANSLATE_MAIN_CONTENT',
           targetLang: targetLangSelect?.value || 'en'
         });
       }
