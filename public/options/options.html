@@ -8,75 +8,156 @@
 </head>
 <body>
   <header class="header">
-    <h1>🛡️ Resource Guardian Settings</h1>
+    <div class="header-inner">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">🛡️</span>
+        <h1>Resource Guardian Settings</h1>
+      </div>
+      <div id="saveNotice" class="save-badge hidden" aria-live="polite">Settings saved</div>
+    </div>
   </header>
 
   <main class="container">
     <!-- Resource Policies -->
-    <section class="section card">
-      <h2>Resource Guard Policies</h2>
-      <p class="section-desc">Select which resource types to block across all websites by default.</p>
+    <section class="section card" aria-labelledby="heading-policies">
+      <h2 id="heading-policies">Resource Guard Policies</h2>
+      <p class="section-desc">Configure default declarative filtering policies for all resource types. Blocking happens before resources are fetched over the network.</p>
       <div id="policyContainer" class="policy-grid">
-        <!-- Dynamically rendered -->
+        <!-- Rendered dynamically -->
       </div>
     </section>
 
-    <!-- Site Exceptions -->
-    <section class="section card">
-      <h2>Site Exceptions & Overrides</h2>
-      <p class="section-desc">Manage domain-specific rules and paused protections.</p>
-      <div class="add-exception-row">
-        <input type="text" id="newExceptionDomain" placeholder="e.g. example.com">
-        <button id="addExceptionBtn" class="primary-btn">Add Exception</button>
+    <!-- Site Exceptions & Overrides -->
+    <section class="section card" aria-labelledby="heading-exceptions">
+      <h2 id="heading-exceptions">Site Exceptions & Overrides</h2>
+      <p class="section-desc">Manage domain-specific exceptions, pause protection for specific sites, or override category policies per domain.</p>
+      <div class="add-row">
+        <label for="newExceptionDomain" class="sr-only">Add Domain Exception</label>
+        <input type="text" id="newExceptionDomain" placeholder="e.g. example.com or app.internal.net">
+        <button id="addExceptionBtn" class="primary-btn">Add Site Exception</button>
       </div>
-      <ul id="exceptionsList" class="exceptions-list">
-        <!-- Dynamically rendered -->
+      <ul id="exceptionsList" class="exceptions-list" aria-label="Configured site exceptions">
+        <!-- Rendered dynamically -->
+      </ul>
+    </section>
+
+    <!-- Custom Pattern Rules -->
+    <section class="section card" aria-labelledby="heading-custom-rules">
+      <h2 id="heading-custom-rules">Custom Pattern Rules</h2>
+      <p class="section-desc">Add fine-grained pattern rules (e.g. <code>*tracker.com*</code> or <code>cdn.example.org</code>) to allow or block specific requests.</p>
+      <div class="custom-rule-form">
+        <div class="rule-inputs">
+          <input type="text" id="customRulePattern" placeholder="URL Pattern (e.g. *adservice.com*)">
+          <select id="customRuleAction" aria-label="Rule Action">
+            <option value="block">Block</option>
+            <option value="allow">Allow</option>
+          </select>
+          <input type="text" id="customRuleScope" placeholder="Site Scope (optional, e.g. news.com)">
+        </div>
+        <button id="addCustomRuleBtn" class="secondary-btn">Add Rule</button>
+      </div>
+      <ul id="customRulesList" class="custom-rules-list" aria-label="Custom Pattern Rules">
+        <!-- Rendered dynamically -->
       </ul>
     </section>
 
     <!-- Translation Configuration -->
-    <section class="section card">
-      <h2>Translation Optimizer</h2>
-      <div class="form-group">
-        <label for="transMode">Translation Mode</label>
-        <select id="transMode">
-          <option value="manual">Manual (User explicitly initiates)</option>
-          <option value="selective">Selective (Prompt when non-native text detected)</option>
-          <option value="assisted">Assisted (Selection / Main Content Focus)</option>
-        </select>
+    <section class="section card" aria-labelledby="heading-translation">
+      <h2 id="heading-translation">Translation Optimizer</h2>
+      <p class="section-desc">Control translation behavior, provider endpoints, and performance caching limits.</p>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="transMode">Translation Workflow Mode</label>
+          <select id="transMode">
+            <option value="manual">Manual (User explicitly initiates on selection)</option>
+            <option value="selective">Selective (Prompt when non-native content is detected)</option>
+            <option value="assisted">Assisted (Selection and main content targeting)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="defaultTargetLang">Default Target Language</label>
+          <select id="defaultTargetLang">
+            <option value="en">English (en)</option>
+            <option value="es">Spanish (es)</option>
+            <option value="fr">French (fr)</option>
+            <option value="ar">Arabic (ar - RTL)</option>
+            <option value="de">German (de)</option>
+            <option value="zh">Chinese (zh)</option>
+            <option value="ja">Japanese (ja)</option>
+            <option value="ru">Russian (ru)</option>
+            <option value="he">Hebrew (he - RTL)</option>
+          </select>
+        </div>
       </div>
 
       <div class="form-group">
-        <label for="providerType">Translation Provider</label>
+        <label for="providerType">Translation Engine Provider</label>
         <select id="providerType">
-          <option value="mock">Built-in Mock Engine (Offline/Test)</option>
-          <option value="manual">Manual Copy-Paste Workflow</option>
-          <option value="custom_api">Custom REST API Endpoint</option>
+          <option value="mock">Built-in Mock Engine (Offline / Diagnostic)</option>
+          <option value="manual">Manual Copy-Paste Workflow (No API calls)</option>
+          <option value="custom_api">Custom REST API Endpoint (External Provider)</option>
         </select>
       </div>
 
-      <div id="customApiFields" class="form-group hidden">
-        <label for="apiEndpoint">API Endpoint URL</label>
-        <input type="text" id="apiEndpoint" placeholder="https://api.example.com/translate">
-        <label for="apiKey">API Key (Optional)</label>
-        <input type="password" id="apiKey" placeholder="Bearer Key">
+      <div id="customApiFields" class="custom-api-box hidden">
+        <div class="form-group">
+          <label for="apiEndpoint">API Endpoint URL</label>
+          <input type="text" id="apiEndpoint" placeholder="https://api.example.com/v1/translate">
+        </div>
+        <div class="form-group">
+          <label for="apiKey">API Bearer Key / Token</label>
+          <input type="password" id="apiKey" placeholder="Private API Secret">
+        </div>
+        <div class="checkbox-group privacy-warning">
+          <label>
+            <input type="checkbox" id="sendPageContentConsent">
+            <strong>Consent Notice:</strong> I understand and consent that user-selected text will be transmitted to this configured endpoint for translation.
+          </label>
+        </div>
+      </div>
+
+      <div class="form-grid cache-limits">
+        <div class="form-group">
+          <label for="maxCacheEntries">Max Cache Entries</label>
+          <input type="number" id="maxCacheEntries" min="10" max="2000" step="50" value="500">
+        </div>
+        <div class="form-group">
+          <label for="concurrencyLimit">Concurrency Limit</label>
+          <input type="number" id="concurrencyLimit" min="1" max="5" value="1">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button id="clearTranslationCacheBtn" class="outline-btn">Clear Translation Cache</button>
       </div>
     </section>
 
-    <!-- Privacy & Data -->
-    <section class="section card">
-      <h2>Privacy & Data Management</h2>
-      <div class="form-group checkbox-group">
+    <!-- Privacy & Data Controls -->
+    <section class="section card" aria-labelledby="heading-privacy">
+      <h2 id="heading-privacy">Privacy & Data Controls</h2>
+      <p class="section-desc">Resource Guardian does not track browsing history. Manage local counters and persistent configuration safely.</p>
+
+      <div class="checkbox-group">
         <label>
-          <input type="checkbox" id="clearStatsOnRestart">
-          <span>Clear request statistics on browser restart</span>
+          <input type="checkbox" id="collectStats">
+          <span>Enable aggregate request blocking statistics</span>
         </label>
       </div>
-      <div class="btn-row">
-        <button id="exportSettingsBtn" class="secondary-btn">Export Settings</button>
+
+      <div class="checkbox-group">
+        <label>
+          <input type="checkbox" id="clearStatsOnRestart">
+          <span>Automatically reset statistics counters on browser restart</span>
+        </label>
+      </div>
+
+      <div class="btn-row data-actions">
+        <button id="clearStatsBtn" class="outline-btn">Reset Statistics Counters</button>
+        <button id="exportSettingsBtn" class="secondary-btn">Export Settings (JSON)</button>
         <button id="importSettingsBtn" class="secondary-btn">Import Settings</button>
-        <input type="file" id="importFileInput" style="display: none;" accept=".json">
-        <button id="resetDefaultsBtn" class="danger-btn">Reset Defaults</button>
+        <input type="file" id="importFileInput" class="hidden" accept=".json">
+        <button id="resetDefaultsBtn" class="danger-btn">Reset All to Defaults</button>
       </div>
     </section>
   </main>

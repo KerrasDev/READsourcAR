@@ -11,7 +11,7 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   margin: 0;
   padding: 12px;
   width: 320px;
@@ -19,6 +19,17 @@ body {
   color: var(--text-color);
   box-sizing: border-box;
   font-size: 13px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
 .header {
@@ -42,10 +53,19 @@ body {
 
 #optionsBtn {
   background: none;
-  border: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
   font-size: 16px;
   cursor: pointer;
   padding: 4px;
+}
+
+#optionsBtn:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .card {
@@ -69,25 +89,29 @@ body {
 .status-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
 }
 
 .status-active {
   color: #16a34a;
+  font-weight: 700;
 }
 
 .status-disabled {
   color: var(--danger);
+  font-weight: 700;
 }
 
 .primary-btn, .secondary-btn, .action-btn, .outline-btn {
   width: 100%;
-  padding: 6px 12px;
+  padding: 7px 12px;
   border-radius: 6px;
   font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;
   font-size: 12px;
+  transition: background-color 0.15s ease;
 }
 
 .primary-btn {
@@ -120,10 +144,22 @@ body {
   color: white;
 }
 
+.action-btn:hover {
+  background-color: #0f766e;
+}
+
 .outline-btn {
   background-color: transparent;
   border-color: var(--border);
   color: var(--text-color);
+}
+
+.outline-btn:hover {
+  background-color: #f8fafc;
+}
+
+.danger-text {
+  color: var(--danger);
 }
 
 .site-header {
@@ -140,6 +176,7 @@ body {
   border-radius: 4px;
   font-size: 11px;
   font-family: monospace;
+  font-weight: 600;
 }
 
 .category-grid {
@@ -162,6 +199,14 @@ body {
   border-radius: 6px;
   border: 1px solid var(--border);
   font-size: 12px;
+  background: #fff;
+}
+
+.status-notice {
+  font-size: 11px;
+  color: var(--subtext-color);
+  margin-top: 6px;
+  min-height: 14px;
 }
 
 .footer {
@@ -169,4 +214,12 @@ body {
   font-size: 11px;
   color: var(--subtext-color);
   margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.sub-footer {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 2px;
 }
