@@ -1,14 +1,15 @@
 import { StorageManager } from '../shared/settings';
-import { compileSettingsToDNRRules } from '../rules/rule-compiler';
+import { compileSettingsWithTelemetry, DNRRule } from '../rules/rule-compiler';
 import { AppSettings, ResourceStats } from '../shared/types';
 
 /**
- * Service Worker Event Handler & DNR Coordinator
+ * Service Worker Event Handler & DNR Dynamic Rules Coordinator.
+ * Strictly event-driven with zero persistent loops or background timers.
  */
 
-export async function updateDNRRules(): Promise<void> {
+export async function updateDNRRules(): Promise<{ count: number; warning?: string }> {
   const settings = await StorageManager.getSettings();
-  const rules = compileSettingsToDNRRules(settings);
+  const compilation = compileSettingsWithTelemetry(settings);
 
   if (typeof chrome !== 'undefined' && chrome.declarativeNetRequest) {
     try {
@@ -17,19 +18,51 @@ export async function updateDNRRules(): Promise<void> {
 
       await chrome.declarativeNetRequest.updateDynamicRules({
         removeRuleIds,
-        addRules: rules as unknown as chrome.declarativeNetRequest.Rule[]
+        addRules: compilation.rules as unknown as chrome.declarativeNetRequest.Rule[]
       });
-      console.log(`Updated declarativeNetRequest with ${rules.length} active rules.`);
+
+      if (compilation.warning) {
+        console.warn(`[Resource Guardian] ${compilation.warning}`);
+      }
+
+      console.log(`[Resource Guardian] Synchronized ${compilation.rules.length} DNR dynamic rules.`);
+      return { count: compilation.rules.length, warning: compilation.warning };
     } catch (err) {
-      console.error('Failed to update DNR rules:', err);
+      console.error('[Resource Guardian] Failed to synchronize DNR dynamic rules:', err);
+      return { count: 0, warning: (err as Error).message };
     }
   }
+
+  return { count: compilation.rules.length };
 }
 
-// Service worker listeners initialization
+// Bounded Statistics update helper
+export async function incrementStats(category: keyof ResourceStats['blockedByCategory']): Promise<void> {
+  const stats = await StorageManager.getStats();
+  stats.totalBlocked = (stats.totalBlocked || 0) + 1;
+  stats.totalEvaluated = (stats.totalEvaluated || 0) + 1;
+  if (!stats.blockedByCategory) {
+    stats.blockedByCategory = {
+      script: 0,
+      thirdPartyScript: 0,
+      iframe: 0,
+      image: 0,
+      media: 0,
+      stylesheet: 0,
+      font: 0,
+      worker: 0,
+      popup: 0
+    };
+  }
+  stats.blockedByCategory[category] = (stats.blockedByCategory[category] || 0) + 1;
+  stats.lastUpdated = Date.now();
+  await StorageManager.saveStats(stats);
+}
+
+// Event-driven lifecycle listeners
 if (typeof chrome !== 'undefined' && chrome.runtime) {
-  chrome.runtime.onInstalled.addListener(async () => {
-    console.log('Resource Guardian installed/updated.');
+  chrome.runtime.onInstalled.addListener(async (details) => {
+    console.log(`[Resource Guardian] Extension installed/updated (reason: ${details.reason}).`);
     await updateDNRRules();
   });
 
@@ -56,8 +89,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     await updateDNRRules();
   });
 
-  // Listen for settings change messages from popup/options or chrome storage changes
-  if (chrome.storage) {
+  // Observe settings storage changes
+  if (chrome.storage && chrome.storage.local) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName === 'local' && changes.settings) {
         updateDNRRules();
@@ -65,17 +98,38 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     });
   }
 
-  // Handle messages from UI or content scripts
+  // Debug rule matching telemetry when supported (unpacked developer extension)
+  if (chrome.declarativeNetRequest && 'onRuleMatchedDebug' in chrome.declarativeNetRequest) {
+    chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (info) => {
+      const settings = await StorageManager.getSettings();
+      if (!settings.privacy.collectStats) return;
+
+      const rule = info.rule;
+      const resType = info.request.type;
+      let category: keyof ResourceStats['blockedByCategory'] = 'script';
+
+      if (resType === 'sub_frame') category = 'iframe';
+      else if (resType === 'image') category = 'image';
+      else if (resType === 'media') category = 'media';
+      else if (resType === 'stylesheet') category = 'stylesheet';
+      else if (resType === 'font') category = 'font';
+      else if (resType === 'script') category = 'script';
+
+      await incrementStats(category);
+    });
+  }
+
+  // Service Worker Message Dispatcher
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'GET_SETTINGS') {
       StorageManager.getSettings().then((settings) => sendResponse({ settings }));
-      return true; // async
+      return true;
     }
 
     if (message.type === 'SAVE_SETTINGS') {
-      StorageManager.saveSettings(message.settings as AppSettings).then(() => {
-        updateDNRRules();
-        sendResponse({ success: true });
+      StorageManager.saveSettings(message.settings as AppSettings).then(async () => {
+        const syncResult = await updateDNRRules();
+        sendResponse({ success: true, activeRules: syncResult.count, warning: syncResult.warning });
       });
       return true;
     }
@@ -84,8 +138,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
       StorageManager.getSettings().then(async (settings) => {
         settings.globalProtectionEnabled = !settings.globalProtectionEnabled;
         await StorageManager.saveSettings(settings);
-        await updateDNRRules();
-        sendResponse({ success: true, enabled: settings.globalProtectionEnabled });
+        const syncResult = await updateDNRRules();
+        sendResponse({ success: true, enabled: settings.globalProtectionEnabled, activeRules: syncResult.count });
       });
       return true;
     }
@@ -99,8 +153,12 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
           }
           settings.siteExceptions[domain].paused = !settings.siteExceptions[domain].paused;
           await StorageManager.saveSettings(settings);
-          await updateDNRRules();
-          sendResponse({ success: true, paused: settings.siteExceptions[domain].paused });
+          const syncResult = await updateDNRRules();
+          sendResponse({
+            success: true,
+            paused: settings.siteExceptions[domain].paused,
+            activeRules: syncResult.count
+          });
         });
         return true;
       }
@@ -129,6 +187,20 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         lastUpdated: Date.now()
       }).then(() => sendResponse({ success: true }));
       return true;
+    }
+
+    if (message.type === 'GET_ACTIVE_RULES_COUNT') {
+      if (chrome.declarativeNetRequest) {
+        chrome.declarativeNetRequest.getDynamicRules().then((rules) => {
+          sendResponse({ count: rules.length });
+        }).catch(() => {
+          sendResponse({ count: 0 });
+        });
+        return true;
+      } else {
+        sendResponse({ count: 0 });
+        return false;
+      }
     }
   });
 }

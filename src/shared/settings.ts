@@ -122,6 +122,8 @@ export function validateAndMigrateSettings(input: any): AppSettings {
   return result;
 }
 
+const memoryStore: Record<string, string> = {};
+
 /**
  * Storage Abstraction Layer for Chrome Extension Local Storage
  */
@@ -133,8 +135,11 @@ export const StorageManager = {
           resolve(validateAndMigrateSettings(res.settings));
         });
       });
+    } else if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('rg_settings');
+      return validateAndMigrateSettings(saved ? JSON.parse(saved) : null);
     } else {
-      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('rg_settings') : null;
+      const saved = memoryStore['rg_settings'];
       return validateAndMigrateSettings(saved ? JSON.parse(saved) : null);
     }
   },
@@ -147,6 +152,8 @@ export const StorageManager = {
       });
     } else if (typeof localStorage !== 'undefined') {
       localStorage.setItem('rg_settings', JSON.stringify(validated));
+    } else {
+      memoryStore['rg_settings'] = JSON.stringify(validated);
     }
   },
 
@@ -160,8 +167,10 @@ export const StorageManager = {
     } else if (typeof localStorage !== 'undefined') {
       const saved = localStorage.getItem('rg_stats');
       return saved ? JSON.parse(saved) : DEFAULT_STATS;
+    } else {
+      const saved = memoryStore['rg_stats'];
+      return saved ? JSON.parse(saved) : DEFAULT_STATS;
     }
-    return DEFAULT_STATS;
   },
 
   async saveStats(stats: ResourceStats): Promise<void> {
@@ -171,6 +180,8 @@ export const StorageManager = {
       });
     } else if (typeof localStorage !== 'undefined') {
       localStorage.setItem('rg_stats', JSON.stringify(stats));
+    } else {
+      memoryStore['rg_stats'] = JSON.stringify(stats);
     }
   }
 };
