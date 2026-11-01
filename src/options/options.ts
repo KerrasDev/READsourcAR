@@ -1,10 +1,11 @@
 import { StorageManager, DEFAULT_SETTINGS } from '../shared/settings';
-import { AppSettings, ResourceCategory } from '../shared/types';
+import { AppSettings, CustomRule, ResourceCategory } from '../shared/types';
 import { getRegistrableDomain } from '../shared/url';
 
 async function initOptions(): Promise<void> {
   const settings = await StorageManager.getSettings();
   renderPolicies(settings);
+  renderCustomRules(settings);
   renderExceptions(settings);
   renderTranslationSettings(settings);
   renderPrivacySettings(settings);
@@ -37,6 +38,8 @@ function renderPolicies(settings: AppSettings): void {
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
+    checkbox.id = `opt-policy-${cat.id}`;
+    checkbox.setAttribute('aria-label', `Toggle ${cat.label}`);
     checkbox.checked = settings.resourcePolicies[cat.id]?.enabled || false;
     checkbox.addEventListener('change', async () => {
       const curr = await StorageManager.getSettings();
@@ -50,12 +53,58 @@ function renderPolicies(settings: AppSettings): void {
   }
 }
 
+function renderCustomRules(settings: AppSettings): void {
+  const list = document.getElementById('customRulesList');
+  if (!list) return;
+
+  list.innerHTML = '';
+  if (!settings.customRules || settings.customRules.length === 0) {
+    const emptyLi = document.createElement('li');
+    emptyLi.textContent = 'No custom rules defined.';
+    emptyLi.style.color = '#718096';
+    list.appendChild(emptyLi);
+    return;
+  }
+
+  for (const rule of settings.customRules) {
+    const li = document.createElement('li');
+    li.className = 'exception-item';
+
+    const span = document.createElement('span');
+    const scopeText = rule.siteScope && rule.siteScope !== '*' ? ` (Scope: ${rule.siteScope})` : ' (Global)';
+    span.textContent = `[${rule.action.toUpperCase()}] ${rule.pattern}${scopeText}`;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'danger-btn';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', async () => {
+      const curr = await StorageManager.getSettings();
+      curr.customRules = curr.customRules.filter((r) => r.id !== rule.id);
+      await StorageManager.saveSettings(curr);
+      renderCustomRules(curr);
+    });
+
+    li.appendChild(span);
+    li.appendChild(removeBtn);
+    list.appendChild(li);
+  }
+}
+
 function renderExceptions(settings: AppSettings): void {
   const list = document.getElementById('exceptionsList');
   if (!list) return;
 
   list.innerHTML = '';
-  for (const [domain, exception] of Object.entries(settings.siteExceptions)) {
+  const entries = Object.entries(settings.siteExceptions || {});
+  if (entries.length === 0) {
+    const emptyLi = document.createElement('li');
+    emptyLi.textContent = 'No site exceptions added.';
+    emptyLi.style.color = '#718096';
+    list.appendChild(emptyLi);
+    return;
+  }
+
+  for (const [domain, exception] of entries) {
     const li = document.createElement('li');
     li.className = 'exception-item';
 
@@ -107,6 +156,35 @@ function renderPrivacySettings(settings: AppSettings): void {
 }
 
 function setupListeners(): void {
+  document.getElementById('addRuleBtn')?.addEventListener('click', async () => {
+    const patternInput = document.getElementById('newRulePattern') as HTMLInputElement;
+    const actionSelect = document.getElementById('newRuleAction') as HTMLSelectElement;
+    const scopeInput = document.getElementById('newRuleScope') as HTMLInputElement;
+
+    const pattern = patternInput?.value.trim();
+    if (!pattern) return;
+
+    const action = (actionSelect?.value as 'allow' | 'block') || 'block';
+    const siteScope = scopeInput?.value.trim() || undefined;
+
+    const newRule: CustomRule = {
+      id: `rule_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      pattern,
+      action,
+      siteScope,
+      createdAt: Date.now()
+    };
+
+    const settings = await StorageManager.getSettings();
+    if (!settings.customRules) settings.customRules = [];
+    settings.customRules.push(newRule);
+    await StorageManager.saveSettings(settings);
+
+    patternInput.value = '';
+    scopeInput.value = '';
+    renderCustomRules(settings);
+  });
+
   document.getElementById('addExceptionBtn')?.addEventListener('click', async () => {
     const input = document.getElementById('newExceptionDomain') as HTMLInputElement;
     if (!input || !input.value.trim()) return;
@@ -115,6 +193,7 @@ function setupListeners(): void {
     if (!domain) return;
 
     const settings = await StorageManager.getSettings();
+    if (!settings.siteExceptions) settings.siteExceptions = {};
     settings.siteExceptions[domain] = { domain, paused: false };
     await StorageManager.saveSettings(settings);
 
@@ -167,7 +246,6 @@ function setupListeners(): void {
 
   document.getElementById('exportSettingsBtn')?.addEventListener('click', async () => {
     const settings = await StorageManager.getSettings();
-    // Strip sensitive fields
     const exportable = JSON.parse(JSON.stringify(settings));
     if (exportable.translation?.provider?.apiKey) {
       exportable.translation.provider.apiKey = '';
@@ -197,7 +275,7 @@ function setupListeners(): void {
         await StorageManager.saveSettings(parsed);
         alert('Settings imported successfully.');
         initOptions();
-      } catch (err) {
+      } catch {
         alert('Failed to parse settings JSON file.');
       }
     };

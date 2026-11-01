@@ -37,11 +37,12 @@ export interface NormalizedUrl {
 
 /**
  * Normalizes a URL string, resolving relative URLs if a base URL is provided.
+ * Handles default ports (80 for http, 443 for https) and IDN/punycode hostnames safely.
  */
 export function normalizeUrl(input: string, baseUrl?: string): NormalizedUrl {
   const invalidResult: NormalizedUrl = {
     isValid: false,
-    raw: input,
+    raw: input || '',
     protocol: '',
     hostname: '',
     port: '',
@@ -57,17 +58,23 @@ export function normalizeUrl(input: string, baseUrl?: string): NormalizedUrl {
   }
 
   try {
-    const url = new URL(input, baseUrl);
+    const url = new URL(input.trim(), baseUrl ? baseUrl.trim() : undefined);
     const hostname = url.hostname.toLowerCase();
     const registrableDomain = getRegistrableDomain(hostname);
+
+    // Normalize port (strip standard default ports)
+    let port = url.port;
+    if ((url.protocol === 'http:' && port === '80') || (url.protocol === 'https:' && port === '443')) {
+      port = '';
+    }
 
     return {
       isValid: true,
       raw: url.href,
       protocol: url.protocol,
       hostname,
-      port: url.port,
-      pathname: url.pathname,
+      port,
+      pathname: url.pathname || '/',
       search: url.search,
       hash: url.hash,
       origin: url.origin,
@@ -82,10 +89,12 @@ export function normalizeUrl(input: string, baseUrl?: string): NormalizedUrl {
  * Extracts the registrable domain (e.g. example.co.uk or example.com) from a hostname.
  */
 export function getRegistrableDomain(hostname: string): string {
-  if (!hostname) return '';
-  const host = hostname.toLowerCase().trim();
+  if (!hostname || typeof hostname !== 'string') return '';
+  const host = hostname.toLowerCase().trim().replace(/^\.+|\.+$/g, '');
 
-  // Handle IP addresses or localhost
+  if (!host) return '';
+
+  // Handle IP addresses, localhost or .local
   if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host === 'localhost' || host.endsWith('.local')) {
     return host;
   }
@@ -114,6 +123,7 @@ export function getRegistrableDomain(hostname: string): string {
  * Checks if targetHost is a sub-domain of baseHost or exact match.
  */
 export function isSameOrSubdomain(targetHost: string, baseHost: string): boolean {
+  if (!targetHost || !baseHost) return false;
   const target = targetHost.toLowerCase().trim();
   const base = baseHost.toLowerCase().trim();
 
