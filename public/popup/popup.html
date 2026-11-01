@@ -7,37 +7,37 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="header">
+  <header class="header">
     <div class="brand">
-      <span class="logo">🛡️</span>
+      <span class="logo" aria-hidden="true">🛡️</span>
       <h1>Resource Guardian</h1>
     </div>
-    <button id="optionsBtn" title="Open Settings">⚙️</button>
-  </div>
+    <button id="optionsBtn" title="Open Settings" aria-label="Open Settings">⚙️</button>
+  </header>
 
   <!-- Global Protection Toggle -->
-  <div class="card status-card">
+  <section class="card status-card" aria-labelledby="status-title">
     <div class="status-row">
-      <span>Protection State:</span>
+      <span id="status-title">Protection State:</span>
       <strong id="globalStatus" class="status-active">ENABLED</strong>
     </div>
-    <button id="toggleProtectionBtn" class="primary-btn">Pause Global Protection</button>
-  </div>
+    <button id="toggleProtectionBtn" class="primary-btn" aria-live="polite">Pause Global Protection</button>
+  </section>
 
   <!-- Current Site Quick Controls -->
-  <div class="card site-card">
+  <section class="card site-card" aria-labelledby="domain-title">
     <div class="site-header">
-      <span class="card-title">Current Domain</span>
+      <span id="domain-title" class="card-title">Current Domain</span>
       <span id="currentDomain" class="domain-badge">example.com</span>
     </div>
     <div class="site-actions">
       <button id="toggleSitePauseBtn" class="secondary-btn">Pause for Domain</button>
     </div>
-  </div>
+  </section>
 
   <!-- Quick Category Toggles -->
-  <div class="card categories-card">
-    <span class="card-title">Resource Rules</span>
+  <section class="card categories-card" aria-labelledby="rules-title">
+    <span id="rules-title" class="card-title">Resource Rules</span>
     <div class="category-grid">
       <label class="toggle-item">
         <input type="checkbox" id="cat-thirdPartyScript">
@@ -64,30 +64,36 @@
         <span>Block Popups</span>
       </label>
     </div>
-  </div>
+  </section>
 
   <!-- Quick Translation Action -->
-  <div class="card translation-card">
-    <span class="card-title">Translation Quick Action</span>
+  <section class="card translation-card" aria-labelledby="trans-title">
+    <span id="trans-title" class="card-title">Translation Optimizer</span>
     <div class="translation-controls">
+      <label for="targetLangSelect" class="sr-only">Target Language</label>
       <select id="targetLangSelect">
-        <option value="en">English</option>
-        <option value="es">Spanish</option>
-        <option value="fr">French</option>
-        <option value="ar">Arabic</option>
-        <option value="de">German</option>
-        <option value="zh">Chinese</option>
+        <option value="en">English (en)</option>
+        <option value="es">Spanish (es)</option>
+        <option value="fr">French (fr)</option>
+        <option value="ar">Arabic (ar)</option>
+        <option value="de">German (de)</option>
+        <option value="zh">Chinese (zh)</option>
       </select>
       <div class="btn-group">
-        <button id="translateSelectionBtn" class="action-btn">Translate Selection</button>
-        <button id="restoreTextBtn" class="outline-btn">Restore Text</button>
+        <button id="translateSelectionBtn" class="action-btn" title="Translate currently highlighted text">Translate Selection</button>
+        <button id="translateMainBtn" class="action-btn" title="Translate main content article">Translate Main Content</button>
       </div>
+      <div class="btn-group">
+        <button id="copyTranslatedBtn" class="outline-btn" title="Copy last translated text">Copy Result</button>
+        <button id="restoreTextBtn" class="outline-btn" title="Restore original page text">Restore Text</button>
+      </div>
+      <div id="transStatus" class="trans-status" aria-live="polite"></div>
     </div>
-  </div>
+  </section>
 
-  <div class="footer">
-    <span id="statsSummary">0 requests blocked</span>
-  </div>
+  <footer class="footer">
+    <div id="statsSummary">0 requests blocked</div>
+  </footer>
 
   <script type="module" src="popup.js"></script>
 </body>

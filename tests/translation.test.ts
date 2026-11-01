@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { detectLanguage } from '../src/translation/language-detector';
-import { TranslationManager } from '../src/translation/translation-manager';
+import { describe, it, expect } from 'vitest';
+import { detectLanguage, isRTL } from '../src/translation/language-detector';
+import { TranslationManager, chunkText } from '../src/translation/translation-manager';
 import { DEFAULT_SETTINGS } from '../src/shared/settings';
 
 describe('Translation Engine & Language Detector', () => {
@@ -8,6 +8,21 @@ describe('Translation Engine & Language Detector', () => {
     expect(detectLanguage('', 'fr').lang).toBe('fr');
     expect(detectLanguage('مرحبا بكم في الموقع', 'auto').lang).toBe('ar');
     expect(detectLanguage('Bonjour le monde', 'auto').lang).toBe('fr');
+  });
+
+  it('identifies RTL languages correctly', () => {
+    expect(isRTL('ar')).toBe(true);
+    expect(isRTL('he')).toBe(true);
+    expect(isRTL('fa')).toBe(true);
+    expect(isRTL('en')).toBe(false);
+    expect(isRTL('fr')).toBe(false);
+  });
+
+  it('chunks large text cleanly at sentence/word boundaries', () => {
+    const sentence = 'This is sentence one. This is sentence two. This is sentence three.';
+    const chunks = chunkText(sentence, 30);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.join('')).toBe(sentence);
   });
 
   it('deduplicates and caches translation requests', async () => {
@@ -32,5 +47,13 @@ describe('Translation Engine & Language Detector', () => {
 
     await manager.translateText('Text 3', 'en', 'es');
     expect(manager.getCacheSize()).toBe(2);
+  });
+
+  it('aborts translation when AbortSignal is triggered', async () => {
+    const manager = new TranslationManager(DEFAULT_SETTINGS.translation);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(manager.translateText('Abort test', 'en', 'fr', controller.signal)).rejects.toThrow('aborted');
   });
 });

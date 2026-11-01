@@ -8,23 +8,44 @@
 </head>
 <body>
   <header class="header">
-    <h1>🛡️ Resource Guardian Settings</h1>
+    <div class="brand">
+      <span class="logo" aria-hidden="true">🛡️</span>
+      <h1>Resource Guardian Settings</h1>
+    </div>
   </header>
 
   <main class="container">
     <!-- Resource Policies -->
-    <section class="section card">
-      <h2>Resource Guard Policies</h2>
+    <section class="section card" aria-labelledby="guard-heading">
+      <h2 id="guard-heading">Resource Guard Policies</h2>
       <p class="section-desc">Select which resource types to block across all websites by default.</p>
       <div id="policyContainer" class="policy-grid">
         <!-- Dynamically rendered -->
       </div>
     </section>
 
+    <!-- Custom Allow / Block Rules -->
+    <section class="section card" aria-labelledby="custom-rules-heading">
+      <h2 id="custom-rules-heading">Custom Allow & Block Rules</h2>
+      <p class="section-desc">Define custom URL patterns with granular actions and optional site scoping.</p>
+      <div class="add-rule-form">
+        <input type="text" id="newRulePattern" placeholder="e.g. tracker.com or *ads*">
+        <select id="newRuleAction">
+          <option value="block">Block</option>
+          <option value="allow">Allow</option>
+        </select>
+        <input type="text" id="newRuleScope" placeholder="Site Scope (optional, e.g. example.com)">
+        <button id="addRuleBtn" class="primary-btn">Add Rule</button>
+      </div>
+      <ul id="customRulesList" class="exceptions-list">
+        <!-- Dynamically rendered -->
+      </ul>
+    </section>
+
     <!-- Site Exceptions -->
-    <section class="section card">
-      <h2>Site Exceptions & Overrides</h2>
-      <p class="section-desc">Manage domain-specific rules and paused protections.</p>
+    <section class="section card" aria-labelledby="exceptions-heading">
+      <h2 id="exceptions-heading">Site Exceptions & Overrides</h2>
+      <p class="section-desc">Manage domain-specific exceptions where global protections are paused.</p>
       <div class="add-exception-row">
         <input type="text" id="newExceptionDomain" placeholder="e.g. example.com">
         <button id="addExceptionBtn" class="primary-btn">Add Exception</button>
@@ -35,8 +56,8 @@
     </section>
 
     <!-- Translation Configuration -->
-    <section class="section card">
-      <h2>Translation Optimizer</h2>
+    <section class="section card" aria-labelledby="translation-heading">
+      <h2 id="translation-heading">Translation Optimizer</h2>
       <div class="form-group">
         <label for="transMode">Translation Mode</label>
         <select id="transMode">
@@ -64,8 +85,8 @@
     </section>
 
     <!-- Privacy & Data -->
-    <section class="section card">
-      <h2>Privacy & Data Management</h2>
+    <section class="section card" aria-labelledby="privacy-heading">
+      <h2 id="privacy-heading">Privacy & Data Management</h2>
       <div class="form-group checkbox-group">
         <label>
           <input type="checkbox" id="clearStatsOnRestart">
