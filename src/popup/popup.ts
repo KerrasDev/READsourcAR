@@ -1,6 +1,7 @@
 import { StorageManager } from '../shared/settings';
 import { getRegistrableDomain } from '../shared/url';
 import { AppSettings, ResourceCategory } from '../shared/types';
+import { compileSettingsToDNRRules } from '../rules/rule-compiler';
 
 let currentDomain = '';
 
@@ -9,16 +10,16 @@ async function initPopup(): Promise<void> {
 
   // Fetch active tab
   if (typeof chrome !== 'undefined' && chrome.tabs) {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab && tab.url) {
-      try {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.url) {
         const url = new URL(tab.url);
         currentDomain = getRegistrableDomain(url.hostname);
         const domainBadge = document.getElementById('currentDomain');
         if (domainBadge) domainBadge.textContent = currentDomain || 'N/A';
-      } catch {
-        currentDomain = '';
       }
+    } catch {
+      currentDomain = '';
     }
   }
 
@@ -34,11 +35,11 @@ function updateUI(settings: AppSettings): void {
     if (settings.globalProtectionEnabled) {
       globalStatus.textContent = 'ENABLED';
       globalStatus.className = 'status-active';
-      toggleProtectionBtn.textContent = 'Pause Protection';
+      toggleProtectionBtn.textContent = 'Pause Global Protection';
     } else {
       globalStatus.textContent = 'PAUSED';
       globalStatus.className = 'status-disabled';
-      toggleProtectionBtn.textContent = 'Resume Protection';
+      toggleProtectionBtn.textContent = 'Resume Global Protection';
     }
   }
 
@@ -62,6 +63,13 @@ function updateUI(settings: AppSettings): void {
   const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
   if (targetLangSelect && settings.translation) {
     targetLangSelect.value = settings.translation.targetLang;
+  }
+
+  // Stats Summary
+  const statsSummary = document.getElementById('statsSummary');
+  if (statsSummary) {
+    const activeRules = compileSettingsToDNRRules(settings);
+    statsSummary.textContent = `${activeRules.length} dynamic filtering rules active`;
   }
 }
 
@@ -90,6 +98,16 @@ function setupListeners(): void {
     updateUI(settings);
   });
 
+  document.getElementById('resetSiteBtn')?.addEventListener('click', async () => {
+    if (!currentDomain) return;
+    const settings = await StorageManager.getSettings();
+    if (settings.siteExceptions[currentDomain]) {
+      delete settings.siteExceptions[currentDomain];
+      await StorageManager.saveSettings(settings);
+      updateUI(settings);
+    }
+  });
+
   const categories: ResourceCategory[] = ['thirdPartyScript', 'script', 'iframe', 'image', 'media', 'popup'];
   for (const cat of categories) {
     document.getElementById(`cat-${cat}`)?.addEventListener('change', async (e) => {
@@ -97,6 +115,7 @@ function setupListeners(): void {
       const settings = await StorageManager.getSettings();
       settings.resourcePolicies[cat].enabled = target.checked;
       await StorageManager.saveSettings(settings);
+      updateUI(settings);
     });
   }
 
@@ -114,6 +133,19 @@ function setupListeners(): void {
       if (tab?.id) {
         chrome.tabs.sendMessage(tab.id, {
           type: 'TRANSLATE_SELECTION',
+          targetLang: targetLangSelect?.value || 'en'
+        });
+      }
+    }
+  });
+
+  document.getElementById('translateMainBtn')?.addEventListener('click', async () => {
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'TRANSLATE_MAIN_CONTENT',
           targetLang: targetLangSelect?.value || 'en'
         });
       }
