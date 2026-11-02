@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { detectLanguage } from '../src/translation/language-detector';
-import { TranslationManager } from '../src/translation/translation-manager';
+import { TranslationManager, TranslationCache } from '../src/translation/translation-manager';
 import { DEFAULT_SETTINGS } from '../src/shared/settings';
 
 describe('Translation Engine & Language Detector', () => {
@@ -32,5 +32,23 @@ describe('Translation Engine & Language Detector', () => {
 
     await manager.translateText('Text 3', 'en', 'es');
     expect(manager.getCacheSize()).toBe(2);
+  });
+
+  it('honors cache TTL expiration', async () => {
+    const cache = new TranslationCache(10, 10); // 10ms TTL
+    cache.set('key1', 'Hello', '[ES] Hello', 'en', 'es', 'mock');
+    expect(cache.get('key1')).toBe('[ES] Hello');
+
+    // Wait for TTL expiration
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(cache.get('key1')).toBeNull();
+  });
+
+  it('aborts translation when AbortSignal is triggered', async () => {
+    const manager = new TranslationManager(DEFAULT_SETTINGS.translation);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(manager.translateText('Cancel me', 'en', 'es', controller.signal)).rejects.toThrow('Translation aborted');
   });
 });

@@ -4,6 +4,9 @@ import { StorageManager } from '../shared/settings';
 
 let translationManager: TranslationManager | null = null;
 const originalNodeValues = new WeakMap<Node, string>();
+const originalParentDirs = new WeakMap<HTMLElement, string>();
+
+const RTL_LANGUAGES = new Set(['ar', 'he', 'fa', 'ur', 'yi']);
 
 async function getManager(): Promise<TranslationManager> {
   if (!translationManager) {
@@ -49,29 +52,50 @@ function getTranslatableTextNodes(root: Node): Text[] {
 }
 
 /**
- * Translates selected DOM element or main content area.
+ * Translates selected DOM element or main content area in bounded batches,
+ * handling RTL text direction and preserving original values for restoration.
  */
-export async function translateElement(element: HTMLElement, targetLang?: string): Promise<void> {
+export async function translateElement(element: HTMLElement, targetLang: string = 'en'): Promise<void> {
   const manager = await getManager();
   const textNodes = getTranslatableTextNodes(element);
+  const isRTL = RTL_LANGUAGES.has(targetLang.toLowerCase());
 
-  for (const node of textNodes) {
-    const originalText = node.nodeValue || '';
-    if (!originalNodeValues.has(node)) {
-      originalNodeValues.set(node, originalText);
+  // Set RTL direction on container if applicable
+  if (isRTL) {
+    if (!originalParentDirs.has(element)) {
+      originalParentDirs.set(element, element.getAttribute('dir') || '');
     }
+    element.setAttribute('dir', 'rtl');
+  }
 
-    try {
-      const res = await manager.translateText(originalText, 'auto', targetLang);
-      node.nodeValue = res.translatedText;
-    } catch (err) {
-      console.error('Failed to translate node:', err);
-    }
+  // Process text in bounded chunks (batch size: 10 nodes)
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < textNodes.length; i += BATCH_SIZE) {
+    const batch = textNodes.slice(i, i + BATCH_SIZE);
+
+    await Promise.all(
+      batch.map(async (node) => {
+        const originalText = node.nodeValue || '';
+        if (!originalNodeValues.has(node)) {
+          originalNodeValues.set(node, originalText);
+        }
+
+        // Bounded length protection (truncate excessively long text node to 800 chars per chunk)
+        const textToTranslate = originalText.length > 800 ? originalText.slice(0, 800) : originalText;
+
+        try {
+          const res = await manager.translateText(textToTranslate, 'auto', targetLang);
+          node.nodeValue = res.translatedText + (originalText.length > 800 ? originalText.slice(800) : '');
+        } catch (err) {
+          console.error('Failed to translate node:', err);
+        }
+      })
+    );
   }
 }
 
 /**
- * Restores original text for previously translated nodes in element.
+ * Restores original text and layout direction for previously translated nodes in element.
  */
 export function restoreOriginalText(element: HTMLElement): void {
   const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -79,6 +103,16 @@ export function restoreOriginalText(element: HTMLElement): void {
     const node = walk.currentNode as Text;
     if (originalNodeValues.has(node)) {
       node.nodeValue = originalNodeValues.get(node)!;
+    }
+  }
+
+  // Restore direction if previously altered
+  if (originalParentDirs.has(element)) {
+    const prevDir = originalParentDirs.get(element);
+    if (prevDir) {
+      element.setAttribute('dir', prevDir);
+    } else {
+      element.removeAttribute('dir');
     }
   }
 }
