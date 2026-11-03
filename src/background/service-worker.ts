@@ -1,9 +1,9 @@
 import { StorageManager } from '../shared/settings';
 import { compileSettingsToDNRRules } from '../rules/rule-compiler';
-import { AppSettings, ResourceStats } from '../shared/types';
+import { AppSettings, ResourceStats, ResourceCategory } from '../shared/types';
 
 /**
- * Service Worker Event Handler & DNR Coordinator
+ * Service Worker Event Handler & DeclarativeNetRequest Coordinator
  */
 
 export async function updateDNRRules(): Promise<void> {
@@ -24,6 +24,21 @@ export async function updateDNRRules(): Promise<void> {
       console.error('Failed to update DNR rules:', err);
     }
   }
+}
+
+// Bounded in-memory event tracking helper
+async function recordBlockedRequest(category?: ResourceCategory) {
+  const settings = await StorageManager.getSettings();
+  if (!settings.privacy.collectStats) return;
+
+  const stats = await StorageManager.getStats();
+  stats.totalEvaluated = (stats.totalEvaluated || 0) + 1;
+  stats.totalBlocked = (stats.totalBlocked || 0) + 1;
+  if (category && stats.blockedByCategory[category] !== undefined) {
+    stats.blockedByCategory[category] = (stats.blockedByCategory[category] || 0) + 1;
+  }
+  stats.lastUpdated = Date.now();
+  await StorageManager.saveStats(stats);
 }
 
 // Service worker listeners initialization
@@ -56,7 +71,15 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     await updateDNRRules();
   });
 
-  // Listen for settings change messages from popup/options or chrome storage changes
+  // Listen for declarativeNetRequest matched rules for debugging/statistics if API is present
+  if (chrome.declarativeNetRequest && (chrome.declarativeNetRequest as any).onRuleMatchedDebug) {
+    (chrome.declarativeNetRequest as any).onRuleMatchedDebug.addListener((info: any) => {
+      // Bounded tracking without storing URL history
+      recordBlockedRequest();
+    });
+  }
+
+  // Listen for storage changes
   if (chrome.storage) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName === 'local' && changes.settings) {
@@ -69,7 +92,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'GET_SETTINGS') {
       StorageManager.getSettings().then((settings) => sendResponse({ settings }));
-      return true; // async
+      return true;
     }
 
     if (message.type === 'SAVE_SETTINGS') {
@@ -101,6 +124,21 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
           await StorageManager.saveSettings(settings);
           await updateDNRRules();
           sendResponse({ success: true, paused: settings.siteExceptions[domain].paused });
+        });
+        return true;
+      }
+    }
+
+    if (message.type === 'RESET_SITE_OVERRIDES') {
+      const domain = message.domain;
+      if (domain) {
+        StorageManager.getSettings().then(async (settings) => {
+          if (settings.siteExceptions[domain]) {
+            delete settings.siteExceptions[domain];
+            await StorageManager.saveSettings(settings);
+            await updateDNRRules();
+          }
+          sendResponse({ success: true });
         });
         return true;
       }

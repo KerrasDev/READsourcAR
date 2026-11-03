@@ -17,7 +17,13 @@ export interface DNRRule {
   };
 }
 
-const CATEGORY_RESOURCE_TYPES: Record<ResourceCategory, string[]> = {
+/**
+ * Safe upper bound for dynamic rules in Chromium Manifest V3.
+ * Prevents exceeding MAX_NUMBER_OF_DYNAMIC_AND_SESSION_RULES (5000).
+ */
+export const MAX_SAFE_DYNAMIC_RULES = 5000;
+
+export const CATEGORY_RESOURCE_TYPES: Record<ResourceCategory, string[]> = {
   script: ['script'],
   thirdPartyScript: ['script'],
   iframe: ['sub_frame'],
@@ -30,7 +36,13 @@ const CATEGORY_RESOURCE_TYPES: Record<ResourceCategory, string[]> = {
 };
 
 /**
- * Compiles extension AppSettings into chrome.declarativeNetRequest rules.
+ * Strict 6-Tier Rule Precedence:
+ * Tier 1: Paused Sites (Protection completely paused for domain) -> Priority 1000
+ * Tier 2: Site-scoped Custom Rules (Allow: 210, Block: 200)
+ * Tier 3: Global Custom Rules (Allow: 110, Block: 100)
+ * Tier 4: Site Category Overrides (Allow: 60, Block: 50)
+ * Tier 5: Global Category Policies (Allow: 15, Block: 10)
+ * Tier 6: Default allow (Implicit browser behavior)
  */
 export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
   if (!settings.globalProtectionEnabled) {
@@ -40,48 +52,64 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
   const rules: DNRRule[] = [];
   let nextRuleId = 1;
 
-  // 1. Paused Sites - Priority 1000 (Highest)
+  const pushRule = (rule: DNRRule): boolean => {
+    if (rules.length >= MAX_SAFE_DYNAMIC_RULES) {
+      console.warn(`Dynamic rule budget reached (${MAX_SAFE_DYNAMIC_RULES}). Truncating rules.`);
+      return false;
+    }
+    rules.push(rule);
+    return true;
+  };
+
+  // Tier 1. Paused Sites - Priority 1000 (Allow all on paused domains)
   for (const [domain, exception] of Object.entries(settings.siteExceptions)) {
     if (exception.paused && domain) {
-      rules.push({
+      const added = pushRule({
         id: nextRuleId++,
         priority: 1000,
         action: { type: 'allow' },
         condition: {
-          initiatorDomains: [domain]
+          initiatorDomains: [domain.toLowerCase()]
         }
       });
+      if (!added) return rules;
     }
   }
 
-  // 2. Custom Rules
+  // Tier 2 & 3. Custom Rules
   for (const rule of settings.customRules) {
+    if (!rule.pattern || rule.pattern.trim().length === 0) continue;
+
     const isAllow = rule.action === 'allow';
-    const isSiteScoped = !!rule.siteScope && rule.siteScope !== '*';
+    const isSiteScoped = Boolean(rule.siteScope && rule.siteScope !== '*');
     const basePriority = isSiteScoped ? 200 : 100;
     const priority = isAllow ? basePriority + 10 : basePriority;
 
+    const cleanPattern = rule.pattern.trim();
     const condition: DNRRule['condition'] = {
-      urlFilter: rule.pattern.startsWith('*') ? rule.pattern : `*${rule.pattern}*`
+      urlFilter: cleanPattern.startsWith('*') || cleanPattern.startsWith('||') || cleanPattern.startsWith('http')
+        ? cleanPattern
+        : `*${cleanPattern}*`
     };
 
     if (isSiteScoped && rule.siteScope) {
-      condition.initiatorDomains = [rule.siteScope];
+      condition.initiatorDomains = [rule.siteScope.toLowerCase()];
     }
 
     if (rule.category && CATEGORY_RESOURCE_TYPES[rule.category]) {
       condition.resourceTypes = CATEGORY_RESOURCE_TYPES[rule.category];
     }
 
-    rules.push({
+    const added = pushRule({
       id: nextRuleId++,
       priority,
       action: { type: isAllow ? 'allow' : 'block' },
       condition
     });
+    if (!added) return rules;
   }
 
-  // 3. Site Category Overrides - Priority 50
+  // Tier 4. Site Category Overrides
   for (const [domain, exception] of Object.entries(settings.siteExceptions)) {
     if (exception.paused) continue;
 
@@ -92,7 +120,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
         if (!resTypes) continue;
 
         const condition: DNRRule['condition'] = {
-          initiatorDomains: [domain],
+          initiatorDomains: [domain.toLowerCase()],
           resourceTypes: resTypes
         };
 
@@ -100,17 +128,18 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
           condition.domainType = 'thirdParty';
         }
 
-        rules.push({
+        const added = pushRule({
           id: nextRuleId++,
           priority: action === 'allow' ? 60 : 50,
           action: { type: action },
           condition
         });
+        if (!added) return rules;
       }
     }
   }
 
-  // 4. Global Category Rules - Priority 10
+  // Tier 5. Global Category Policies
   for (const [catStr, policy] of Object.entries(settings.resourcePolicies)) {
     if (!policy.enabled) continue;
 
@@ -126,12 +155,13 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
       condition.domainType = 'thirdParty';
     }
 
-    rules.push({
+    const added = pushRule({
       id: nextRuleId++,
       priority: policy.action === 'allow' ? 15 : 10,
       action: { type: policy.action },
       condition
     });
+    if (!added) return rules;
   }
 
   return rules;

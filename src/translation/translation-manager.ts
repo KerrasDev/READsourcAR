@@ -61,8 +61,51 @@ export class TranslationCache {
 }
 
 /**
- * Translation Manager with Request Deduplication, Concurrency Management,
- * Cancellation, and Bounded Caching.
+ * Splits text into bounded chunks (default ~800 characters) respecting sentence and word boundaries.
+ */
+export function chunkText(text: string, maxChunkLength = 800): string[] {
+  if (!text || text.trim().length === 0) return [];
+  if (text.length <= maxChunkLength) return [text];
+
+  const chunks: string[] = [];
+  const sentences = text.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+/g) || [text];
+
+  let currentChunk = '';
+  for (const sentence of sentences) {
+    if (currentChunk.length + sentence.length <= maxChunkLength) {
+      currentChunk += sentence;
+    } else {
+      if (currentChunk.trim().length > 0) {
+        chunks.push(currentChunk);
+      }
+      if (sentence.length > maxChunkLength) {
+        // Fallback: split long sentences by whitespace
+        const words = sentence.split(/(\s+)/);
+        currentChunk = '';
+        for (const w of words) {
+          if (currentChunk.length + w.length <= maxChunkLength) {
+            currentChunk += w;
+          } else {
+            if (currentChunk.trim().length > 0) chunks.push(currentChunk);
+            currentChunk = w;
+          }
+        }
+      } else {
+        currentChunk = sentence;
+      }
+    }
+  }
+
+  if (currentChunk.trim().length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+/**
+ * Translation Manager with Request Deduplication, Bounded Chunking,
+ * Concurrency Management, Cancellation, and Bounded Caching.
  */
 export class TranslationManager {
   private cache: TranslationCache;
@@ -80,18 +123,52 @@ export class TranslationManager {
   }
 
   async translateText(text: string, sourceLang?: string, targetLang?: string, signal?: AbortSignal): Promise<TranslationResponse> {
+    if (signal?.aborted) {
+      throw new Error('Translation aborted');
+    }
+
     const src = sourceLang || this.settings.sourceLang;
     const tgt = targetLang || this.settings.targetLang;
     const providerObj = createTranslationProvider(this.settings.provider);
 
-    const cacheKey = TranslationCache.generateKey(text, src, tgt, providerObj.name);
+    // If text exceeds chunk limit, chunk and translate incrementally
+    const chunks = chunkText(text, 800);
+    if (chunks.length > 1) {
+      const translatedChunks: string[] = [];
+      let detectedLang = src;
+
+      for (const chunk of chunks) {
+        if (signal?.aborted) throw new Error('Translation aborted');
+        const res = await this.translateSingleChunk(chunk, src, tgt, providerObj, signal);
+        translatedChunks.push(res.translatedText);
+        if (res.detectedSourceLang) detectedLang = res.detectedSourceLang;
+      }
+
+      return {
+        translatedText: translatedChunks.join(''),
+        detectedSourceLang: detectedLang,
+        provider: providerObj.name
+      };
+    }
+
+    return await this.translateSingleChunk(text, src, tgt, providerObj, signal);
+  }
+
+  private async translateSingleChunk(
+    text: string,
+    sourceLang: string,
+    targetLang: string,
+    providerObj: TranslationProvider,
+    signal?: AbortSignal
+  ): Promise<TranslationResponse> {
+    const cacheKey = TranslationCache.generateKey(text, sourceLang, targetLang, providerObj.name);
 
     // 1. Cache hit check
     const cachedResult = this.cache.get(cacheKey);
     if (cachedResult !== null) {
       return {
         translatedText: cachedResult,
-        detectedSourceLang: src,
+        detectedSourceLang: sourceLang,
         provider: providerObj.name
       };
     }
@@ -101,18 +178,20 @@ export class TranslationManager {
       return await this.activeRequests.get(cacheKey)!;
     }
 
-    // 3. Initiate request with concurrency handling
+    // 3. Initiate request with abort signal handling
     const promise = (async () => {
       try {
+        if (signal?.aborted) throw new Error('Translation aborted');
+
         const response = await providerObj.translate({
           text,
-          sourceLang: src,
-          targetLang: tgt,
+          sourceLang,
+          targetLang,
           signal
         });
 
         // Store successful translation in cache
-        this.cache.set(cacheKey, text, response.translatedText, src, tgt, providerObj.name);
+        this.cache.set(cacheKey, text, response.translatedText, sourceLang, targetLang, providerObj.name);
         return response;
       } finally {
         this.activeRequests.delete(cacheKey);
