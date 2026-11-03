@@ -9,6 +9,7 @@ describe('DOM Translation & Node Restoration', () => {
         <h1>Welcome Page</h1>
         <p>This is a test paragraph.</p>
         <code>const x = 10;</code>
+        <pre><code>formatted code</code></pre>
         <input type="text" value="Input field should not be translated">
       </div>
     `;
@@ -27,6 +28,19 @@ describe('DOM Translation & Node Restoration', () => {
     expect(p.textContent).toBe('[ES] This is a test paragraph.');
     expect(code.textContent).toBe('const x = 10;'); // Preserved
     expect(input.value).toBe('Input field should not be translated'); // Preserved
+  });
+
+  it('sets direction to RTL when translating to Arabic and restores cleanly', async () => {
+    const container = document.getElementById('test-container')!;
+    await translateElement(container, 'ar');
+
+    expect(container.getAttribute('dir')).toBe('rtl');
+    expect(container.querySelector('h1')!.textContent).toBe('[AR] Welcome Page');
+
+    restoreOriginalText(container);
+
+    expect(container.getAttribute('dir')).toBeNull();
+    expect(container.querySelector('h1')!.textContent).toBe('Welcome Page');
   });
 
   it('restores original text node values cleanly', async () => {

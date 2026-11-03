@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { compileSettingsToDNRRules } from '../src/rules/rule-compiler';
-import { validateAndMigrateSettings, DEFAULT_SETTINGS } from '../src/shared/settings';
+import { compileSettingsToDNRRules, MAX_SAFE_DYNAMIC_RULES } from '../src/rules/rule-compiler';
+import { validateAndMigrateSettings } from '../src/shared/settings';
 
 describe('DNR Rule Compilation & Precedence', () => {
   it('generates rules for default settings', () => {
     const settings = validateAndMigrateSettings(null);
     const rules = compileSettingsToDNRRules(settings);
 
-    // Default policy enables thirdPartyScript blocking & popup blocking
+    // Default policy enables thirdPartyScript blocking
     expect(rules.length).toBeGreaterThan(0);
     const scriptRule = rules.find((r) => r.condition.domainType === 'thirdParty');
     expect(scriptRule).toBeDefined();
@@ -43,5 +43,24 @@ describe('DNR Rule Compilation & Precedence', () => {
     const siteRule = rules.find((r) => r.condition.initiatorDomains?.includes('example.org'));
     expect(siteRule).toBeDefined();
     expect(siteRule?.priority).toBe(210); // Site-scoped allow priority
+
+    const globalBlockRule = rules.find((r) => r.condition.urlFilter === '*ads.com*');
+    expect(globalBlockRule).toBeDefined();
+    expect(globalBlockRule?.priority).toBe(100); // Global block priority
+  });
+
+  it('respects MAX_SAFE_DYNAMIC_RULES budget limit', () => {
+    const settings = validateAndMigrateSettings(null);
+    for (let i = 0; i < 6000; i++) {
+      settings.customRules.push({
+        id: `rule-${i}`,
+        pattern: `badsite${i}.com`,
+        action: 'block',
+        createdAt: Date.now()
+      });
+    }
+
+    const rules = compileSettingsToDNRRules(settings);
+    expect(rules.length).toBeLessThanOrEqual(MAX_SAFE_DYNAMIC_RULES);
   });
 });

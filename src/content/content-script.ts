@@ -1,9 +1,12 @@
-import { detectLanguage } from '../translation/language-detector';
+import { detectLanguage, isRTL } from '../translation/language-detector';
 import { TranslationManager } from '../translation/translation-manager';
 import { StorageManager } from '../shared/settings';
 
 let translationManager: TranslationManager | null = null;
 const originalNodeValues = new WeakMap<Node, string>();
+const originalElementDirections = new WeakMap<HTMLElement, string>();
+
+let activeAbortController: AbortController | null = null;
 
 async function getManager(): Promise<TranslationManager> {
   if (!translationManager) {
@@ -16,7 +19,7 @@ async function getManager(): Promise<TranslationManager> {
 /**
  * Extracts visible text nodes safely from a container, skipping non-translatable elements.
  */
-function getTranslatableTextNodes(root: Node): Text[] {
+export function getTranslatableTextNodes(root: Node): Text[] {
   const textNodes: Text[] = [];
   const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (node) => {
@@ -24,11 +27,12 @@ function getTranslatableTextNodes(root: Node): Text[] {
       if (!parent) return NodeFilter.FILTER_REJECT;
 
       const tag = parent.tagName.toLowerCase();
-      if (['script', 'style', 'noscript', 'code', 'pre', 'input', 'textarea'].includes(tag)) {
+      // Exclude non-content elements, code, input fields, passwords, scripts, styles
+      if (['script', 'style', 'noscript', 'code', 'pre', 'input', 'textarea', 'kbd', 'samp'].includes(tag)) {
         return NodeFilter.FILTER_REJECT;
       }
 
-      if (parent.isContentEditable || parent.hasAttribute('data-no-translate')) {
+      if (parent.isContentEditable || parent.hasAttribute('data-no-translate') || parent.getAttribute('translate') === 'no') {
         return NodeFilter.FILTER_REJECT;
       }
 
@@ -49,29 +53,46 @@ function getTranslatableTextNodes(root: Node): Text[] {
 }
 
 /**
- * Translates selected DOM element or main content area.
+ * Translates selected DOM element or main content area, adjusting direction (RTL/LTR) as needed.
  */
-export async function translateElement(element: HTMLElement, targetLang?: string): Promise<void> {
+export async function translateElement(element: HTMLElement, targetLang?: string, signal?: AbortSignal): Promise<void> {
   const manager = await getManager();
   const textNodes = getTranslatableTextNodes(element);
 
+  const isTargetRTL = targetLang ? isRTL(targetLang) : false;
+
+  // Track and update direction on parent element if needed
+  if (!originalElementDirections.has(element)) {
+    originalElementDirections.set(element, element.getAttribute('dir') || '');
+  }
+  if (isTargetRTL) {
+    element.setAttribute('dir', 'rtl');
+  }
+
   for (const node of textNodes) {
+    if (signal?.aborted) {
+      throw new Error('Translation cancelled by user');
+    }
+
     const originalText = node.nodeValue || '';
     if (!originalNodeValues.has(node)) {
       originalNodeValues.set(node, originalText);
     }
 
     try {
-      const res = await manager.translateText(originalText, 'auto', targetLang);
+      const res = await manager.translateText(originalText, 'auto', targetLang, signal);
       node.nodeValue = res.translatedText;
-    } catch (err) {
+    } catch (err: any) {
+      if (err.message === 'Translation cancelled by user' || err.message === 'Translation aborted') {
+        throw err;
+      }
       console.error('Failed to translate node:', err);
     }
   }
 }
 
 /**
- * Restores original text for previously translated nodes in element.
+ * Restores original text and element directions cleanly.
  */
 export function restoreOriginalText(element: HTMLElement): void {
   const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -80,6 +101,24 @@ export function restoreOriginalText(element: HTMLElement): void {
     if (originalNodeValues.has(node)) {
       node.nodeValue = originalNodeValues.get(node)!;
     }
+  }
+
+  // Restore direction
+  if (originalElementDirections.has(element)) {
+    const origDir = originalElementDirections.get(element);
+    if (origDir) {
+      element.setAttribute('dir', origDir);
+    } else {
+      element.removeAttribute('dir');
+    }
+  }
+}
+
+// Cancel any active translation job
+export function cancelActiveTranslation(): void {
+  if (activeAbortController) {
+    activeAbortController.abort();
+    activeAbortController = null;
   }
 }
 
@@ -94,7 +133,17 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
       return true;
     }
 
+    if (message.type === 'CANCEL_TRANSLATION') {
+      cancelActiveTranslation();
+      sendResponse({ success: true });
+      return true;
+    }
+
     if (message.type === 'TRANSLATE_SELECTION') {
+      cancelActiveTranslation();
+      activeAbortController = new AbortController();
+      const signal = activeAbortController.signal;
+
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
@@ -102,9 +151,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         const parentElem = container.nodeType === Node.ELEMENT_NODE ? (container as HTMLElement) : container.parentElement;
 
         if (parentElem) {
-          translateElement(parentElem, message.targetLang).then(() => {
-            sendResponse({ success: true });
-          });
+          translateElement(parentElem, message.targetLang, signal)
+            .then(() => sendResponse({ success: true }))
+            .catch((err) => sendResponse({ success: false, error: err.message }));
           return true;
         }
       }
@@ -113,11 +162,15 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     }
 
     if (message.type === 'TRANSLATE_MAIN_CONTENT') {
+      cancelActiveTranslation();
+      activeAbortController = new AbortController();
+      const signal = activeAbortController.signal;
+
       const main = document.querySelector('main') || document.querySelector('article') || document.body;
       if (main) {
-        translateElement(main as HTMLElement, message.targetLang).then(() => {
-          sendResponse({ success: true });
-        });
+        translateElement(main as HTMLElement, message.targetLang, signal)
+          .then(() => sendResponse({ success: true }))
+          .catch((err) => sendResponse({ success: false, error: err.message }));
         return true;
       }
       sendResponse({ success: false, error: 'Main content area not found' });
@@ -125,6 +178,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     }
 
     if (message.type === 'RESTORE_ORIGINAL') {
+      cancelActiveTranslation();
       restoreOriginalText(document.body);
       sendResponse({ success: true });
       return true;
