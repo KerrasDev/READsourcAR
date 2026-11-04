@@ -4,7 +4,7 @@
 
 **Resource Guardian** is a high-performance, privacy-focused Manifest V3 browser extension that provides two core capabilities:
 1. **Resource Guard:** Fine-grained, declarative request filtering to block unwanted, tracking, or expensive web resources before download.
-2. **Translation Optimizer:** Low-overhead translation workflow with request deduplication, bounded LRU caching, and safe DOM manipulation.
+2. **Translation Optimizer:** Low-overhead translation workflow with request deduplication, bounded LRU caching, sentence-aware chunking, text direction handling (RTL/LTR), and safe DOM manipulation.
 
 ---
 
@@ -33,22 +33,30 @@ tests/        - Unit, rule compilation, translation, and DOM JSDOM tests
 
 ## DeclarativeNetRequest & Request Blocking
 
-Resource Guardian uses Chrome's native `declarativeNetRequest` (DNR) dynamic rules to filter network requests **before they download**:
-- **Priority 1000:** Paused domains (User domain exceptions) -> ALLOW
-- **Priority 200-210:** Site-scoped custom rules (Allow / Block)
-- **Priority 100-110:** Global custom rules (Allow / Block)
-- **Priority 50-60:** Per-site category overrides
-- **Priority 10-15:** Global category default policies (e.g., block third-party scripts)
+Resource Guardian uses Chrome's native `declarativeNetRequest` (DNR) dynamic rules to filter network requests **before they download**, adhering to a 6-tier precedence hierarchy:
 
-No heavy `MutationObserver` loops or DOM deletion hacks are used for network request blocking.
+1. **Priority 1000 (Tier 1):** Paused domains (User domain exceptions) -> `ALLOW`
+2. **Priority 210 (Tier 2):** Explicit user site-scoped allow rules
+3. **Priority 200 (Tier 3):** Explicit user site-scoped block rules
+4. **Priority 110 (Tier 4):** Explicit user global allow rules
+5. **Priority 100 (Tier 5):** Explicit user global block rules
+6. **Priority 60 (Tier 6):** Per-site category allow overrides
+7. **Priority 50 (Tier 7):** Per-site category block overrides
+8. **Priority 15 (Tier 8):** Global category default allow policies
+9. **Priority 10 (Tier 9):** Global category default block policies (e.g., third-party scripts)
+10. **Priority 0 (Tier 10):** Default allow behavior for unblocked requests
+
+Dynamic rules are strictly bounded to `MAX_SAFE_DYNAMIC_RULES` (5000) to protect against Chrome API overflow limits.
 
 ---
 
 ## Translation Optimization
 
-- **Bounded Cache:** LRU cache capped at 500 entries with a 24-hour TTL to avoid unbounded memory growth.
-- **Request Deduplication:** Duplicate in-flight requests for the same text and language pair return the active promise without sending extra network calls.
-- **Safe DOM Extraction:** Skips `<code>`, `<pre>`, `<script>`, `<style>`, `<input>`, and `<textarea>` elements, protecting code blocks, inputs, and password fields. Original text nodes are stored using a `WeakMap` for instant, non-destructive restoration.
+- **Sentence-Aware Chunking:** Long text passages exceeding `MAX_CHUNK_LENGTH` (800 characters) are safely segmented at natural sentence or whitespace boundaries before translating.
+- **Bounded LRU Cache:** In-memory LRU cache capped at 500 entries (configurable up to 2000) with a 24-hour TTL to prevent unbounded memory growth.
+- **In-flight Request Deduplication:** Concurrent requests for identical text and language pairs return the active promise, avoiding redundant network trips.
+- **RTL & Text Direction Support:** Automatically toggles `dir="rtl"` / `dir="ltr"` on translated containers when handling RTL languages such as Arabic (`ar`), and cleans up direction attributes upon restoring original text.
+- **Safe DOM Extraction & WeakMap Restoration:** Skips `<code>`, `<pre>`, `<script>`, `<style>`, `<input>`, `<textarea>`, and `[contenteditable]` elements to protect code blocks and password inputs. Original node values and directions are held in `WeakMap` structures for non-destructive restoration.
 
 ---
 
@@ -57,6 +65,9 @@ No heavy `MutationObserver` loops or DOM deletion hacks are used for network req
 - `declarativeNetRequest` / `declarativeNetRequestWithHostAccess`: Required for native request filtering before download.
 - `storage`: Persists lightweight options and per-site exceptions locally.
 - `activeTab`: Permits on-demand text translation on user interaction.
+- `scripting`: Enables content script messaging and DOM translation.
 - `<all_urls>` host permissions: Allows applying request rules and translating text across user-visited domains.
 
-No user data or browsing history is tracked, collected, or transmitted.
+### Privacy Guarantees
+- No user browsing history is tracked, stored, or transmitted.
+- When using external custom API translation providers, explicit consent (`sendPageContentConsent`) is strictly required before any text leaves the browser.

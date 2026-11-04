@@ -6,6 +6,7 @@ let currentDomain = '';
 
 async function initPopup(): Promise<void> {
   const settings = await StorageManager.getSettings();
+  const stats = await StorageManager.getStats();
 
   // Fetch active tab
   if (typeof chrome !== 'undefined' && chrome.tabs) {
@@ -22,11 +23,11 @@ async function initPopup(): Promise<void> {
     }
   }
 
-  updateUI(settings);
+  updateUI(settings, stats);
   setupListeners();
 }
 
-function updateUI(settings: AppSettings): void {
+function updateUI(settings: AppSettings, stats?: any): void {
   const globalStatus = document.getElementById('globalStatus');
   const toggleProtectionBtn = document.getElementById('toggleProtectionBtn');
 
@@ -34,11 +35,11 @@ function updateUI(settings: AppSettings): void {
     if (settings.globalProtectionEnabled) {
       globalStatus.textContent = 'ENABLED';
       globalStatus.className = 'status-active';
-      toggleProtectionBtn.textContent = 'Pause Protection';
+      toggleProtectionBtn.textContent = 'Pause Global Protection';
     } else {
       globalStatus.textContent = 'PAUSED';
       globalStatus.className = 'status-disabled';
-      toggleProtectionBtn.textContent = 'Resume Protection';
+      toggleProtectionBtn.textContent = 'Resume Global Protection';
     }
   }
 
@@ -63,6 +64,22 @@ function updateUI(settings: AppSettings): void {
   if (targetLangSelect && settings.translation) {
     targetLangSelect.value = settings.translation.targetLang;
   }
+
+  // Stats Summary
+  const statsSummary = document.getElementById('statsSummary');
+  if (statsSummary && stats) {
+    statsSummary.textContent = `${stats.totalBlocked} requests blocked`;
+  }
+}
+
+function showStatusMsg(text: string, isError = false): void {
+  const el = document.getElementById('translationStatusMsg');
+  if (!el) return;
+  el.textContent = text;
+  el.className = isError ? 'status-msg error' : 'status-msg success';
+  setTimeout(() => {
+    el.className = 'status-msg hidden';
+  }, 4000);
 }
 
 function setupListeners(): void {
@@ -112,10 +129,47 @@ function setupListeners(): void {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
       if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'TRANSLATE_SELECTION',
-          targetLang: targetLangSelect?.value || 'en'
-        });
+        chrome.tabs.sendMessage(
+          tab.id,
+          {
+            type: 'TRANSLATE_SELECTION',
+            targetLang: targetLangSelect?.value || 'en'
+          },
+          (res) => {
+            if (chrome.runtime.lastError) {
+              showStatusMsg('Could not connect to page', true);
+            } else if (res && !res.success) {
+              showStatusMsg(res.error || 'Failed to translate selection', true);
+            } else {
+              showStatusMsg('Selection translated');
+            }
+          }
+        );
+      }
+    }
+  });
+
+  document.getElementById('translateMainBtn')?.addEventListener('click', async () => {
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const targetLangSelect = document.getElementById('targetLangSelect') as HTMLSelectElement;
+      if (tab?.id) {
+        chrome.tabs.sendMessage(
+          tab.id,
+          {
+            type: 'TRANSLATE_MAIN_CONTENT',
+            targetLang: targetLangSelect?.value || 'en'
+          },
+          (res) => {
+            if (chrome.runtime.lastError) {
+              showStatusMsg('Could not connect to page', true);
+            } else if (res && !res.success) {
+              showStatusMsg(res.error || 'Failed to translate content', true);
+            } else {
+              showStatusMsg('Main content translated');
+            }
+          }
+        );
       }
     }
   });
@@ -124,7 +178,9 @@ function setupListeners(): void {
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { type: 'RESTORE_ORIGINAL' });
+        chrome.tabs.sendMessage(tab.id, { type: 'RESTORE_ORIGINAL' }, () => {
+          showStatusMsg('Original text restored');
+        });
       }
     }
   });

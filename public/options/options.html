@@ -26,7 +26,7 @@
       <h2>Site Exceptions & Overrides</h2>
       <p class="section-desc">Manage domain-specific rules and paused protections.</p>
       <div class="add-exception-row">
-        <input type="text" id="newExceptionDomain" placeholder="e.g. example.com">
+        <input type="text" id="newExceptionDomain" placeholder="e.g. example.com" aria-label="Exception Domain">
         <button id="addExceptionBtn" class="primary-btn">Add Exception</button>
       </div>
       <ul id="exceptionsList" class="exceptions-list">
@@ -61,11 +61,22 @@
         <label for="apiKey">API Key (Optional)</label>
         <input type="password" id="apiKey" placeholder="Bearer Key">
       </div>
+
+      <div class="form-group">
+        <label for="maxCacheEntries">Max Cache Entries</label>
+        <input type="number" id="maxCacheEntries" min="50" max="2000" value="500">
+      </div>
     </section>
 
     <!-- Privacy & Data -->
     <section class="section card">
       <h2>Privacy & Data Management</h2>
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" id="sendPageContentConsent">
+          <span>Allow sending selected text to external translation API (Custom API mode)</span>
+        </label>
+      </div>
       <div class="form-group checkbox-group">
         <label>
           <input type="checkbox" id="clearStatsOnRestart">
