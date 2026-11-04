@@ -12,7 +12,7 @@
       <span class="logo">🛡️</span>
       <h1>Resource Guardian</h1>
     </div>
-    <button id="optionsBtn" title="Open Settings">⚙️</button>
+    <button id="optionsBtn" title="Open Settings" aria-label="Open Settings">⚙️</button>
   </div>
 
   <!-- Global Protection Toggle -->
@@ -57,7 +57,7 @@
       </label>
       <label class="toggle-item">
         <input type="checkbox" id="cat-media">
-        <span>Block Media (Video/Audio)</span>
+        <span>Block Media (Audio/Video)</span>
       </label>
       <label class="toggle-item">
         <input type="checkbox" id="cat-popup">
@@ -70,7 +70,7 @@
   <div class="card translation-card">
     <span class="card-title">Translation Quick Action</span>
     <div class="translation-controls">
-      <select id="targetLangSelect">
+      <select id="targetLangSelect" aria-label="Target Language">
         <option value="en">English</option>
         <option value="es">Spanish</option>
         <option value="fr">French</option>
@@ -80,8 +80,10 @@
       </select>
       <div class="btn-group">
         <button id="translateSelectionBtn" class="action-btn">Translate Selection</button>
+        <button id="translateMainBtn" class="secondary-btn">Translate Main Content</button>
         <button id="restoreTextBtn" class="outline-btn">Restore Text</button>
       </div>
+      <div id="translationStatusMsg" class="status-msg hidden"></div>
     </div>
   </div>
 

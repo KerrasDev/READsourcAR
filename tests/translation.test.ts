@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { detectLanguage } from '../src/translation/language-detector';
-import { TranslationManager } from '../src/translation/translation-manager';
+import { TranslationManager, splitTextIntoChunks, MAX_CHUNK_LENGTH } from '../src/translation/translation-manager';
 import { DEFAULT_SETTINGS } from '../src/shared/settings';
 
 describe('Translation Engine & Language Detector', () => {
@@ -8,6 +8,16 @@ describe('Translation Engine & Language Detector', () => {
     expect(detectLanguage('', 'fr').lang).toBe('fr');
     expect(detectLanguage('مرحبا بكم في الموقع', 'auto').lang).toBe('ar');
     expect(detectLanguage('Bonjour le monde', 'auto').lang).toBe('fr');
+  });
+
+  it('splits long text into bounded chunks respecting sentence boundaries', () => {
+    const text = 'First sentence. Second sentence! Third sentence? Fourth sentence.';
+    const chunks = splitTextIntoChunks(text, 35);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.join('')).toBe(text);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(35);
+    }
   });
 
   it('deduplicates and caches translation requests', async () => {

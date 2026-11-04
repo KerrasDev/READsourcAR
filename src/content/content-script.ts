@@ -1,9 +1,10 @@
-import { detectLanguage } from '../translation/language-detector';
+import { detectLanguage, isRTL } from '../translation/language-detector';
 import { TranslationManager } from '../translation/translation-manager';
 import { StorageManager } from '../shared/settings';
 
 let translationManager: TranslationManager | null = null;
 const originalNodeValues = new WeakMap<Node, string>();
+const originalDirections = new WeakMap<HTMLElement, string>();
 
 async function getManager(): Promise<TranslationManager> {
   if (!translationManager) {
@@ -16,7 +17,7 @@ async function getManager(): Promise<TranslationManager> {
 /**
  * Extracts visible text nodes safely from a container, skipping non-translatable elements.
  */
-function getTranslatableTextNodes(root: Node): Text[] {
+export function getTranslatableTextNodes(root: Node): Text[] {
   const textNodes: Text[] = [];
   const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (node) => {
@@ -49,10 +50,32 @@ function getTranslatableTextNodes(root: Node): Text[] {
 }
 
 /**
- * Translates selected DOM element or main content area.
+ * Translates selected DOM element or main content area, updating text direction if target is RTL.
  */
 export async function translateElement(element: HTMLElement, targetLang?: string): Promise<void> {
+  const settings = await StorageManager.getSettings();
+
+  // If custom API provider is selected, check consent
+  if (settings.translation.provider.type === 'custom_api' && !settings.privacy.sendPageContentConsent) {
+    throw new Error('User consent required to send page content to external translation API');
+  }
+
   const manager = await getManager();
+  manager.updateSettings(settings.translation);
+
+  const tgt = targetLang || settings.translation.targetLang;
+  const isTargetRTL = isRTL(tgt);
+
+  if (!originalDirections.has(element)) {
+    originalDirections.set(element, element.getAttribute('dir') || '');
+  }
+
+  if (isTargetRTL) {
+    element.setAttribute('dir', 'rtl');
+  } else if (element.getAttribute('dir') === 'rtl') {
+    element.setAttribute('dir', 'ltr');
+  }
+
   const textNodes = getTranslatableTextNodes(element);
 
   for (const node of textNodes) {
@@ -62,7 +85,7 @@ export async function translateElement(element: HTMLElement, targetLang?: string
     }
 
     try {
-      const res = await manager.translateText(originalText, 'auto', targetLang);
+      const res = await manager.translateText(originalText, 'auto', tgt);
       node.nodeValue = res.translatedText;
     } catch (err) {
       console.error('Failed to translate node:', err);
@@ -71,7 +94,7 @@ export async function translateElement(element: HTMLElement, targetLang?: string
 }
 
 /**
- * Restores original text for previously translated nodes in element.
+ * Restores original text and direction for previously translated nodes in element.
  */
 export function restoreOriginalText(element: HTMLElement): void {
   const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -79,6 +102,15 @@ export function restoreOriginalText(element: HTMLElement): void {
     const node = walk.currentNode as Text;
     if (originalNodeValues.has(node)) {
       node.nodeValue = originalNodeValues.get(node)!;
+    }
+  }
+
+  if (originalDirections.has(element)) {
+    const origDir = originalDirections.get(element);
+    if (origDir) {
+      element.setAttribute('dir', origDir);
+    } else {
+      element.removeAttribute('dir');
     }
   }
 }
@@ -102,9 +134,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
         const parentElem = container.nodeType === Node.ELEMENT_NODE ? (container as HTMLElement) : container.parentElement;
 
         if (parentElem) {
-          translateElement(parentElem, message.targetLang).then(() => {
-            sendResponse({ success: true });
-          });
+          translateElement(parentElem, message.targetLang)
+            .then(() => sendResponse({ success: true }))
+            .catch((err) => sendResponse({ success: false, error: err.message }));
           return true;
         }
       }
@@ -115,9 +147,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     if (message.type === 'TRANSLATE_MAIN_CONTENT') {
       const main = document.querySelector('main') || document.querySelector('article') || document.body;
       if (main) {
-        translateElement(main as HTMLElement, message.targetLang).then(() => {
-          sendResponse({ success: true });
-        });
+        translateElement(main as HTMLElement, message.targetLang)
+          .then(() => sendResponse({ success: true }))
+          .catch((err) => sendResponse({ success: false, error: err.message }));
         return true;
       }
       sendResponse({ success: false, error: 'Main content area not found' });

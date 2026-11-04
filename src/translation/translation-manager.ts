@@ -1,6 +1,55 @@
 import { TranslationCacheEntry, TranslationSettings } from '../shared/types';
 import { createTranslationProvider, TranslationProvider, TranslationResponse } from './provider';
 
+export const MAX_CHUNK_LENGTH = 800;
+
+/**
+ * Splits text into bounded chunks respecting sentence boundaries where possible.
+ */
+export function splitTextIntoChunks(text: string, maxChunkLength = MAX_CHUNK_LENGTH): string[] {
+  if (!text || text.trim().length === 0) return [];
+  if (text.length <= maxChunkLength) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxChunkLength) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Try sentence end (. ! ? \n)
+    let splitIndex = -1;
+    const sub = remaining.slice(0, maxChunkLength);
+    const matches = Array.from(sub.matchAll(/([.!?\n]+)\s+/g));
+    if (matches.length > 0) {
+      const lastMatch = matches[matches.length - 1];
+      if (lastMatch.index !== undefined) {
+        splitIndex = lastMatch.index + lastMatch[0].length;
+      }
+    }
+
+    // Fallback to space
+    if (splitIndex <= 0) {
+      const lastSpace = sub.lastIndexOf(' ');
+      if (lastSpace > 0) {
+        splitIndex = lastSpace + 1;
+      }
+    }
+
+    // Hard fallback if no spaces
+    if (splitIndex <= 0) {
+      splitIndex = maxChunkLength;
+    }
+
+    chunks.push(remaining.slice(0, splitIndex));
+    remaining = remaining.slice(splitIndex);
+  }
+
+  return chunks;
+}
+
 /**
  * In-memory LRU Translation Cache with TTL and Bounded Size.
  */
@@ -62,7 +111,7 @@ export class TranslationCache {
 
 /**
  * Translation Manager with Request Deduplication, Concurrency Management,
- * Cancellation, and Bounded Caching.
+ * Cancellation, Chunking, and Bounded Caching.
  */
 export class TranslationManager {
   private cache: TranslationCache;
@@ -84,6 +133,36 @@ export class TranslationManager {
     const tgt = targetLang || this.settings.targetLang;
     const providerObj = createTranslationProvider(this.settings.provider);
 
+    // If text exceeds MAX_CHUNK_LENGTH, chunk and translate
+    if (text.length > MAX_CHUNK_LENGTH) {
+      const chunks = splitTextIntoChunks(text, MAX_CHUNK_LENGTH);
+      const translatedChunks: string[] = [];
+      let detectedLang = src;
+
+      for (const chunk of chunks) {
+        if (signal?.aborted) throw new Error('Translation aborted');
+        const res = await this.translateSingleChunk(chunk, src, tgt, signal, providerObj);
+        translatedChunks.push(res.translatedText);
+        if (res.detectedSourceLang) detectedLang = res.detectedSourceLang;
+      }
+
+      return {
+        translatedText: translatedChunks.join(''),
+        detectedSourceLang: detectedLang,
+        provider: providerObj.name
+      };
+    }
+
+    return await this.translateSingleChunk(text, src, tgt, signal, providerObj);
+  }
+
+  private async translateSingleChunk(
+    text: string,
+    src: string,
+    tgt: string,
+    signal?: AbortSignal,
+    providerObj = createTranslationProvider(this.settings.provider)
+  ): Promise<TranslationResponse> {
     const cacheKey = TranslationCache.generateKey(text, src, tgt, providerObj.name);
 
     // 1. Cache hit check
