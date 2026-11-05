@@ -29,6 +29,19 @@ describe('DOM Translation & Node Restoration', () => {
     expect(input.value).toBe('Input field should not be translated'); // Preserved
   });
 
+  it('sets dir="rtl" for Arabic and restores original direction on reset', async () => {
+    const container = document.getElementById('test-container')!;
+    expect(container.getAttribute('dir')).toBeNull();
+
+    await translateElement(container, 'ar');
+    expect(container.getAttribute('dir')).toBe('rtl');
+    expect(container.querySelector('h1')!.textContent).toBe('[AR] Welcome Page');
+
+    restoreOriginalText(container);
+    expect(container.getAttribute('dir')).toBeNull();
+    expect(container.querySelector('h1')!.textContent).toBe('Welcome Page');
+  });
+
   it('restores original text node values cleanly', async () => {
     const container = document.getElementById('test-container')!;
     await translateElement(container, 'es');

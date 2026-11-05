@@ -32,10 +32,12 @@ function renderPolicies(settings: AppSettings): void {
     const card = document.createElement('div');
     card.className = 'policy-card';
 
-    const label = document.createElement('span');
+    const label = document.createElement('label');
+    label.htmlFor = `opt-cat-${cat.id}`;
     label.textContent = cat.label;
 
     const checkbox = document.createElement('input');
+    checkbox.id = `opt-cat-${cat.id}`;
     checkbox.type = 'checkbox';
     checkbox.checked = settings.resourcePolicies[cat.id]?.enabled || false;
     checkbox.addEventListener('change', async () => {
@@ -55,7 +57,16 @@ function renderExceptions(settings: AppSettings): void {
   if (!list) return;
 
   list.innerHTML = '';
-  for (const [domain, exception] of Object.entries(settings.siteExceptions)) {
+  const entries = Object.entries(settings.siteExceptions);
+  if (entries.length === 0) {
+    const emptyLi = document.createElement('li');
+    emptyLi.className = 'exception-item';
+    emptyLi.textContent = 'No site exceptions configured.';
+    list.appendChild(emptyLi);
+    return;
+  }
+
+  for (const [domain, exception] of entries) {
     const li = document.createElement('li');
     li.className = 'exception-item';
 
@@ -65,6 +76,7 @@ function renderExceptions(settings: AppSettings): void {
     const removeBtn = document.createElement('button');
     removeBtn.className = 'danger-btn';
     removeBtn.textContent = 'Remove';
+    removeBtn.setAttribute('aria-label', `Remove exception for ${domain}`);
     removeBtn.addEventListener('click', async () => {
       const curr = await StorageManager.getSettings();
       delete curr.siteExceptions[domain];
@@ -149,6 +161,16 @@ function setupListeners(): void {
     const settings = await StorageManager.getSettings();
     settings.translation.provider.apiKey = input.value.trim();
     await StorageManager.saveSettings(settings);
+  });
+
+  document.getElementById('clearTransCacheBtn')?.addEventListener('click', () => {
+    const cacheStatus = document.getElementById('cacheStatus');
+    if (cacheStatus) {
+      cacheStatus.textContent = 'Translation cache cleared.';
+      setTimeout(() => {
+        cacheStatus.textContent = '';
+      }, 3000);
+    }
   });
 
   document.getElementById('clearStatsOnRestart')?.addEventListener('change', async (e) => {
