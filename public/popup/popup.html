@@ -9,10 +9,10 @@
 <body>
   <div class="header">
     <div class="brand">
-      <span class="logo">🛡️</span>
+      <span class="logo" aria-hidden="true">🛡️</span>
       <h1>Resource Guardian</h1>
     </div>
-    <button id="optionsBtn" title="Open Settings">⚙️</button>
+    <button id="optionsBtn" title="Open Settings" aria-label="Settings">⚙️</button>
   </div>
 
   <!-- Global Protection Toggle -->
@@ -37,7 +37,10 @@
 
   <!-- Quick Category Toggles -->
   <div class="card categories-card">
-    <span class="card-title">Resource Rules</span>
+    <div class="rules-header">
+      <span class="card-title">Resource Rules</span>
+      <span id="activeRulesCount" class="rules-badge" title="Active Declarative Rules">0 Rules</span>
+    </div>
     <div class="category-grid">
       <label class="toggle-item">
         <input type="checkbox" id="cat-thirdPartyScript">
@@ -70,18 +73,21 @@
   <div class="card translation-card">
     <span class="card-title">Translation Quick Action</span>
     <div class="translation-controls">
-      <select id="targetLangSelect">
+      <label for="targetLangSelect" class="sr-only">Target Language</label>
+      <select id="targetLangSelect" aria-label="Target Language">
         <option value="en">English</option>
         <option value="es">Spanish</option>
         <option value="fr">French</option>
-        <option value="ar">Arabic</option>
+        <option value="ar">Arabic (RTL)</option>
         <option value="de">German</option>
         <option value="zh">Chinese</option>
       </select>
       <div class="btn-group">
         <button id="translateSelectionBtn" class="action-btn">Translate Selection</button>
+        <button id="translateMainBtn" class="action-btn">Translate Main</button>
         <button id="restoreTextBtn" class="outline-btn">Restore Text</button>
       </div>
+      <div id="transStatus" class="trans-status" aria-live="polite"></div>
     </div>
   </div>
 

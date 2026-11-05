@@ -1,17 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { compileSettingsToDNRRules } from '../src/rules/rule-compiler';
+import {
+  compileSettingsToDNRRules,
+  compileSettingsWithDiagnostics,
+  MAX_SAFE_DYNAMIC_RULES
+} from '../src/rules/rule-compiler';
 import { validateAndMigrateSettings, DEFAULT_SETTINGS } from '../src/shared/settings';
 
 describe('DNR Rule Compilation & Precedence', () => {
-  it('generates rules for default settings', () => {
+  it('generates rules for default settings with excluded schemes', () => {
     const settings = validateAndMigrateSettings(null);
     const rules = compileSettingsToDNRRules(settings);
 
-    // Default policy enables thirdPartyScript blocking & popup blocking
+    // Default policy enables thirdPartyScript blocking
     expect(rules.length).toBeGreaterThan(0);
     const scriptRule = rules.find((r) => r.condition.domainType === 'thirdParty');
     expect(scriptRule).toBeDefined();
     expect(scriptRule?.action.type).toBe('block');
+    expect(scriptRule?.condition.excludedSchemes).toContain('chrome-extension');
   });
 
   it('respects global protection toggle', () => {
@@ -43,5 +48,25 @@ describe('DNR Rule Compilation & Precedence', () => {
     const siteRule = rules.find((r) => r.condition.initiatorDomains?.includes('example.org'));
     expect(siteRule).toBeDefined();
     expect(siteRule?.priority).toBe(210); // Site-scoped allow priority
+  });
+
+  it('bounds dynamic rules and produces warning when MAX_SAFE_DYNAMIC_RULES is reached', () => {
+    const settings = validateAndMigrateSettings(null);
+    // Create rules exceeding MAX_SAFE_DYNAMIC_RULES
+    const excessiveRules = [];
+    for (let i = 0; i < MAX_SAFE_DYNAMIC_RULES + 50; i++) {
+      excessiveRules.push({
+        id: `rule-${i}`,
+        pattern: `tracker${i}.adnetwork.com`,
+        action: 'block' as const,
+        createdAt: Date.now()
+      });
+    }
+    settings.customRules = excessiveRules;
+
+    const diag = compileSettingsWithDiagnostics(settings);
+    expect(diag.rules.length).toBe(MAX_SAFE_DYNAMIC_RULES);
+    expect(diag.warning).toBeDefined();
+    expect(diag.warning).toContain(`Maximum safe DNR rule count (${MAX_SAFE_DYNAMIC_RULES}) reached`);
   });
 });

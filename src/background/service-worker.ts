@@ -1,6 +1,6 @@
 import { StorageManager } from '../shared/settings';
-import { compileSettingsToDNRRules } from '../rules/rule-compiler';
-import { AppSettings, ResourceStats } from '../shared/types';
+import { compileSettingsWithDiagnostics } from '../rules/rule-compiler';
+import { AppSettings, ResourceStats, ResourceCategory } from '../shared/types';
 
 /**
  * Service Worker Event Handler & DNR Coordinator
@@ -8,7 +8,11 @@ import { AppSettings, ResourceStats } from '../shared/types';
 
 export async function updateDNRRules(): Promise<void> {
   const settings = await StorageManager.getSettings();
-  const rules = compileSettingsToDNRRules(settings);
+  const compilation = compileSettingsWithDiagnostics(settings);
+
+  if (compilation.warning) {
+    console.warn(`[Resource Guardian] ${compilation.warning}`);
+  }
 
   if (typeof chrome !== 'undefined' && chrome.declarativeNetRequest) {
     try {
@@ -17,12 +21,35 @@ export async function updateDNRRules(): Promise<void> {
 
       await chrome.declarativeNetRequest.updateDynamicRules({
         removeRuleIds,
-        addRules: rules as unknown as chrome.declarativeNetRequest.Rule[]
+        addRules: compilation.rules as unknown as chrome.declarativeNetRequest.Rule[]
       });
-      console.log(`Updated declarativeNetRequest with ${rules.length} active rules.`);
+      console.log(`Updated declarativeNetRequest with ${compilation.rules.length} active rules.`);
     } catch (err) {
       console.error('Failed to update DNR rules:', err);
     }
+  }
+}
+
+// Map DNR matched request type to ResourceCategory
+function mapResourceTypeToCategory(type?: string): ResourceCategory {
+  switch (type) {
+    case 'script':
+      return 'script';
+    case 'sub_frame':
+      return 'iframe';
+    case 'image':
+      return 'image';
+    case 'media':
+      return 'media';
+    case 'stylesheet':
+      return 'stylesheet';
+    case 'font':
+      return 'font';
+    case 'websocket':
+    case 'other':
+      return 'worker';
+    default:
+      return 'script';
   }
 }
 
@@ -55,6 +82,24 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
     }
     await updateDNRRules();
   });
+
+  // Track matched DNR rules if onRuleMatchedDebug API is available (e.g. unpacked/debug extension)
+  if (chrome.declarativeNetRequest && (chrome.declarativeNetRequest as any).onRuleMatchedDebug) {
+    (chrome.declarativeNetRequest as any).onRuleMatchedDebug.addListener(async (info: any) => {
+      try {
+        const stats = await StorageManager.getStats();
+        stats.totalBlocked++;
+        const cat = mapResourceTypeToCategory(info?.request?.type);
+        if (stats.blockedByCategory[cat] !== undefined) {
+          stats.blockedByCategory[cat]++;
+        }
+        stats.lastUpdated = Date.now();
+        await StorageManager.saveStats(stats);
+      } catch (e) {
+        // Safe silent fail for stats
+      }
+    });
+  }
 
   // Listen for settings change messages from popup/options or chrome storage changes
   if (chrome.storage) {
