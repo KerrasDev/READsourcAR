@@ -5,21 +5,23 @@
  */
 
 const COMMON_TWO_LEVEL_TLDS = new Set([
-  'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'me.uk',
+  'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'me.uk', 'ltd.uk', 'plc.uk',
   'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au',
   'co.jp', 'ne.jp', 'or.jp', 'go.jp', 'ac.jp',
   'com.br', 'net.br', 'org.br', 'gov.br',
-  'co.in', 'net.in', 'org.in', 'gov.in', 'gen.in',
+  'co.in', 'net.in', 'org.in', 'gov.in', 'gen.in', 'firm.in', 'ind.in',
   'com.cn', 'net.cn', 'org.cn', 'gov.cn',
-  'com.tw', 'org.tw', 'idv.tw',
-  'co.nz', 'net.nz', 'org.nz',
-  'com.mx', 'org.mx', 'gob.mx',
+  'com.tw', 'org.tw', 'idv.tw', 'gov.tw',
+  'co.nz', 'net.nz', 'org.nz', 'govt.nz',
+  'com.mx', 'org.mx', 'gob.mx', 'edu.mx',
   'co.za', 'org.za', 'gov.za',
-  'co.kr', 'ne.kr', 'or.kr', 're.kr',
+  'co.kr', 'ne.kr', 'or.kr', 're.kr', 'pe.kr',
   'com.sg', 'edu.sg', 'gov.sg',
-  'com.hk', 'org.hk', 'edu.hk',
-  'com.tr', 'org.tr', 'gov.tr',
-  'co.il', 'org.il', 'ac.il'
+  'com.hk', 'org.hk', 'edu.hk', 'gov.hk',
+  'com.tr', 'org.tr', 'gov.tr', 'edu.tr',
+  'co.il', 'org.il', 'ac.il', 'gov.il',
+  'com.ar', 'net.ar', 'org.ar', 'gov.ar',
+  'com.co', 'net.co', 'org.co', 'gov.co'
 ]);
 
 export interface NormalizedUrl {
@@ -36,12 +38,16 @@ export interface NormalizedUrl {
 }
 
 /**
- * Normalizes a URL string, resolving relative URLs if a base URL is provided.
+ * Normalizes a URL string:
+ * - Resolves relative paths if baseUrl is provided.
+ * - Cleans and normalizes hostnames (lowercasing, default port removal).
+ * - Extracts standard registrable domains.
+ * - Handles IDN / punycode gracefully.
  */
 export function normalizeUrl(input: string, baseUrl?: string): NormalizedUrl {
   const invalidResult: NormalizedUrl = {
     isValid: false,
-    raw: input,
+    raw: input || '',
     protocol: '',
     hostname: '',
     port: '',
@@ -56,9 +62,21 @@ export function normalizeUrl(input: string, baseUrl?: string): NormalizedUrl {
     return invalidResult;
   }
 
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return invalidResult;
+  }
+
   try {
-    const url = new URL(input, baseUrl);
+    const url = new URL(trimmed, baseUrl);
     const hostname = url.hostname.toLowerCase();
+
+    // Remove redundant default ports (80 for http, 443 for https)
+    let port = url.port;
+    if ((url.protocol === 'http:' && port === '80') || (url.protocol === 'https:' && port === '443')) {
+      port = '';
+    }
+
     const registrableDomain = getRegistrableDomain(hostname);
 
     return {
@@ -66,8 +84,8 @@ export function normalizeUrl(input: string, baseUrl?: string): NormalizedUrl {
       raw: url.href,
       protocol: url.protocol,
       hostname,
-      port: url.port,
-      pathname: url.pathname,
+      port,
+      pathname: url.pathname || '/',
       search: url.search,
       hash: url.hash,
       origin: url.origin,
@@ -83,10 +101,12 @@ export function normalizeUrl(input: string, baseUrl?: string): NormalizedUrl {
  */
 export function getRegistrableDomain(hostname: string): string {
   if (!hostname) return '';
-  const host = hostname.toLowerCase().trim();
+  const host = hostname.toLowerCase().trim().replace(/^\.+|\.+$/g, '');
 
-  // Handle IP addresses or localhost
-  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host === 'localhost' || host.endsWith('.local')) {
+  if (!host) return '';
+
+  // Handle IP addresses (IPv4 or IPv6) or localhost
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(':') || host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) {
     return host;
   }
 
@@ -114,6 +134,7 @@ export function getRegistrableDomain(hostname: string): string {
  * Checks if targetHost is a sub-domain of baseHost or exact match.
  */
 export function isSameOrSubdomain(targetHost: string, baseHost: string): boolean {
+  if (!targetHost || !baseHost) return false;
   const target = targetHost.toLowerCase().trim();
   const base = baseHost.toLowerCase().trim();
 
@@ -128,5 +149,6 @@ export function isThirdParty(requestHost: string, initiatorHost: string): boolea
   if (!requestHost || !initiatorHost) return false;
   const reqDomain = getRegistrableDomain(requestHost);
   const initDomain = getRegistrableDomain(initiatorHost);
+  if (!reqDomain || !initDomain) return false;
   return reqDomain !== initDomain;
 }

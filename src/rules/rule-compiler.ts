@@ -17,7 +17,20 @@ export interface DNRRule {
   };
 }
 
-const CATEGORY_RESOURCE_TYPES: Record<ResourceCategory, string[]> = {
+export interface RuleCompilationResult {
+  rules: DNRRule[];
+  totalGenerated: number;
+  limitExceeded: boolean;
+  warnings: string[];
+}
+
+/**
+ * Maximum safe dynamic rules under Chrome declarativeNetRequest.
+ * Chrome standard dynamic rule limit is 5,000 for regular dynamic rules.
+ */
+export const MAX_SAFE_DYNAMIC_RULES = 5000;
+
+export const CATEGORY_RESOURCE_TYPES: Record<ResourceCategory, string[]> = {
   script: ['script'],
   thirdPartyScript: ['script'],
   iframe: ['sub_frame'],
@@ -30,20 +43,45 @@ const CATEGORY_RESOURCE_TYPES: Record<ResourceCategory, string[]> = {
 };
 
 /**
- * Compiles extension AppSettings into chrome.declarativeNetRequest rules.
+ * Compiles extension AppSettings into declarativeNetRequest rules following a strict
+ * 6-tier precedence model:
+ *
+ * Tier 1: Mandatory browser/extension safety constraints (Priority 5000)
+ * Tier 2: Explicit user / site allow rules (Priority 1000 for paused domains, 210 for site allow, 110 for global allow)
+ * Tier 3: Explicit user / site block rules (Priority 200 for site block, 100 for global block)
+ * Tier 4: Per-site category overrides (Priority 60 for allow override, 50 for block override)
+ * Tier 5: Global category settings (Priority 15 for allow, 10 for block)
+ * Tier 6: Default allow behavior (implied DNR default when no block rule matches)
  */
-export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
+export function compileSettingsToDNRRulesDetailed(settings: AppSettings): RuleCompilationResult {
+  const warnings: string[] = [];
   if (!settings.globalProtectionEnabled) {
-    return [];
+    return {
+      rules: [],
+      totalGenerated: 0,
+      limitExceeded: false,
+      warnings
+    };
   }
 
-  const rules: DNRRule[] = [];
+  const generatedRules: DNRRule[] = [];
   let nextRuleId = 1;
 
-  // 1. Paused Sites - Priority 1000 (Highest)
+  // Tier 1: Browser & Extension Safety Constraints (Priority 5000)
+  // Ensure extension internal requests & critical protocol schemes are never blocked
+  generatedRules.push({
+    id: nextRuleId++,
+    priority: 5000,
+    action: { type: 'allow' },
+    condition: {
+      urlFilter: 'chrome-extension://*'
+    }
+  });
+
+  // Tier 2A: Paused Sites - Allow all requests originating from this domain (Priority 1000)
   for (const [domain, exception] of Object.entries(settings.siteExceptions)) {
     if (exception.paused && domain) {
-      rules.push({
+      generatedRules.push({
         id: nextRuleId++,
         priority: 1000,
         action: { type: 'allow' },
@@ -54,11 +92,13 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     }
   }
 
-  // 2. Custom Rules
+  // Tier 2B & 3: Explicit User Allow/Block Rules
+  // Site-scoped user rules take precedence over global user rules
   for (const rule of settings.customRules) {
     const isAllow = rule.action === 'allow';
     const isSiteScoped = !!rule.siteScope && rule.siteScope !== '*';
     const basePriority = isSiteScoped ? 200 : 100;
+    // Allow rules get +10 to win over block rules at the same scope tier
     const priority = isAllow ? basePriority + 10 : basePriority;
 
     const condition: DNRRule['condition'] = {
@@ -73,7 +113,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
       condition.resourceTypes = CATEGORY_RESOURCE_TYPES[rule.category];
     }
 
-    rules.push({
+    generatedRules.push({
       id: nextRuleId++,
       priority,
       action: { type: isAllow ? 'allow' : 'block' },
@@ -81,7 +121,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     });
   }
 
-  // 3. Site Category Overrides - Priority 50
+  // Tier 4: Per-site category overrides (Priority 60 for allow, 50 for block)
   for (const [domain, exception] of Object.entries(settings.siteExceptions)) {
     if (exception.paused) continue;
 
@@ -100,7 +140,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
           condition.domainType = 'thirdParty';
         }
 
-        rules.push({
+        generatedRules.push({
           id: nextRuleId++,
           priority: action === 'allow' ? 60 : 50,
           action: { type: action },
@@ -110,7 +150,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     }
   }
 
-  // 4. Global Category Rules - Priority 10
+  // Tier 5: Global Category Policies (Priority 15 for allow, 10 for block)
   for (const [catStr, policy] of Object.entries(settings.resourcePolicies)) {
     if (!policy.enabled) continue;
 
@@ -126,7 +166,7 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
       condition.domainType = 'thirdParty';
     }
 
-    rules.push({
+    generatedRules.push({
       id: nextRuleId++,
       priority: policy.action === 'allow' ? 15 : 10,
       action: { type: policy.action },
@@ -134,5 +174,32 @@ export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
     });
   }
 
-  return rules;
+  const totalGenerated = generatedRules.length;
+  let limitExceeded = false;
+  let finalRules = generatedRules;
+
+  if (totalGenerated > MAX_SAFE_DYNAMIC_RULES) {
+    limitExceeded = true;
+    warnings.push(
+      `Rule limit exceeded: Generated ${totalGenerated} rules, which exceeds the safe dynamic rule quota of ${MAX_SAFE_DYNAMIC_RULES}. Truncating to highest priority rules.`
+    );
+    // Sort descending by priority so most important rules survive truncation
+    finalRules = [...generatedRules]
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, MAX_SAFE_DYNAMIC_RULES);
+  }
+
+  return {
+    rules: finalRules,
+    totalGenerated,
+    limitExceeded,
+    warnings
+  };
+}
+
+/**
+ * Standard rule compilation returning DNRRule array for chrome API consumption.
+ */
+export function compileSettingsToDNRRules(settings: AppSettings): DNRRule[] {
+  return compileSettingsToDNRRulesDetailed(settings).rules;
 }
