@@ -8,26 +8,47 @@
 </head>
 <body>
   <header class="header">
-    <h1>🛡️ Resource Guardian Settings</h1>
+    <div class="brand">
+      <span class="logo">🛡️</span>
+      <h1>Resource Guardian Settings & Policies</h1>
+    </div>
   </header>
 
   <main class="container">
     <!-- Resource Policies -->
     <section class="section card">
-      <h2>Resource Guard Policies</h2>
-      <p class="section-desc">Select which resource types to block across all websites by default.</p>
+      <h2>Resource Guard Policies (Global Request Filtering)</h2>
+      <p class="section-desc">Select which resource types to block before download across all sites. Uses native <code>declarativeNetRequest</code> rules.</p>
       <div id="policyContainer" class="policy-grid">
         <!-- Dynamically rendered -->
       </div>
     </section>
 
+    <!-- Custom Rules Builder -->
+    <section class="section card">
+      <h2>Custom Filtering Rules</h2>
+      <p class="section-desc">Define custom URL pattern rules for fine-grained blocking or allowing.</p>
+      <div class="rule-builder">
+        <input type="text" id="newRulePattern" placeholder="URL Pattern (e.g. *doubleclick.net*, cdn.example.com)">
+        <select id="newRuleAction">
+          <option value="block">Block</option>
+          <option value="allow">Allow</option>
+        </select>
+        <input type="text" id="newRuleScope" placeholder="Site Scope (optional, e.g. example.org)">
+        <button id="addRuleBtn" class="primary-btn">Add Rule</button>
+      </div>
+      <ul id="customRulesList" class="custom-rules-list">
+        <!-- Dynamically rendered -->
+      </ul>
+    </section>
+
     <!-- Site Exceptions -->
     <section class="section card">
-      <h2>Site Exceptions & Overrides</h2>
-      <p class="section-desc">Manage domain-specific rules and paused protections.</p>
+      <h2>Site Exceptions & Paused Protections</h2>
+      <p class="section-desc">Manage domain-level protection bypasses and site-specific overrides.</p>
       <div class="add-exception-row">
-        <input type="text" id="newExceptionDomain" placeholder="e.g. example.com">
-        <button id="addExceptionBtn" class="primary-btn">Add Exception</button>
+        <input type="text" id="newExceptionDomain" placeholder="Domain (e.g. example.com)">
+        <button id="addExceptionBtn" class="primary-btn">Add Paused Domain</button>
       </div>
       <ul id="exceptionsList" class="exceptions-list">
         <!-- Dynamically rendered -->
@@ -37,29 +58,45 @@
     <!-- Translation Configuration -->
     <section class="section card">
       <h2>Translation Optimizer</h2>
+      <p class="section-desc">Configure lightweight, on-demand translation workflows with bounded LRU caching and deduplication.</p>
+
       <div class="form-group">
-        <label for="transMode">Translation Mode</label>
+        <label for="transMode">Translation Workflow Mode</label>
         <select id="transMode">
-          <option value="manual">Manual (User explicitly initiates)</option>
-          <option value="selective">Selective (Prompt when non-native text detected)</option>
-          <option value="assisted">Assisted (Selection / Main Content Focus)</option>
+          <option value="manual">Mode A: Manual (Only on user action - Default)</option>
+          <option value="selective">Mode B: Selective (Offer translation when foreign text detected)</option>
+          <option value="assisted">Mode C: Assisted (Selection / Main Content Focus)</option>
         </select>
       </div>
 
       <div class="form-group">
-        <label for="providerType">Translation Provider</label>
+        <label for="providerType">Translation Engine Provider</label>
         <select id="providerType">
-          <option value="mock">Built-in Mock Engine (Offline/Test)</option>
-          <option value="manual">Manual Copy-Paste Workflow</option>
-          <option value="custom_api">Custom REST API Endpoint</option>
+          <option value="mock">Built-in Mock Engine (Offline, Low Resource)</option>
+          <option value="manual">Manual Copy-Paste Assistant</option>
+          <option value="custom_api">Custom REST API Endpoint (DeepL, LibreTranslate, etc.)</option>
         </select>
       </div>
 
       <div id="customApiFields" class="form-group hidden">
+        <div class="alert-box">
+          ⚠️ <strong>Privacy Consent Notice:</strong> Connecting an external API transmits selected page text to that third-party endpoint. Never send confidential credentials.
+        </div>
         <label for="apiEndpoint">API Endpoint URL</label>
-        <input type="text" id="apiEndpoint" placeholder="https://api.example.com/translate">
-        <label for="apiKey">API Key (Optional)</label>
-        <input type="password" id="apiKey" placeholder="Bearer Key">
+        <input type="text" id="apiEndpoint" placeholder="https://libretranslate.com/translate">
+        <label for="apiKey">API Key / Token (Stored locally)</label>
+        <input type="password" id="apiKey" placeholder="Authorization Key">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group half">
+          <label for="maxCacheEntries">Max Cache Entries</label>
+          <input type="number" id="maxCacheEntries" min="50" max="2000" step="50" value="500">
+        </div>
+        <div class="form-group half">
+          <label for="concurrencyLimit">Concurrency Limit</label>
+          <input type="number" id="concurrencyLimit" min="1" max="5" value="1">
+        </div>
       </div>
     </section>
 
@@ -73,10 +110,10 @@
         </label>
       </div>
       <div class="btn-row">
-        <button id="exportSettingsBtn" class="secondary-btn">Export Settings</button>
+        <button id="exportSettingsBtn" class="secondary-btn">Export Settings (JSON)</button>
         <button id="importSettingsBtn" class="secondary-btn">Import Settings</button>
         <input type="file" id="importFileInput" style="display: none;" accept=".json">
-        <button id="resetDefaultsBtn" class="danger-btn">Reset Defaults</button>
+        <button id="resetDefaultsBtn" class="danger-btn">Reset All Defaults</button>
       </div>
     </section>
   </main>

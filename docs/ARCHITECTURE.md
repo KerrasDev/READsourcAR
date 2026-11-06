@@ -1,62 +1,50 @@
-# Resource Guardian Architecture & Documentation
+# Resource Guardian Architecture & Engineering Design
 
-## Overview
+## 1. Overview
 
-**Resource Guardian** is a high-performance, privacy-focused Manifest V3 browser extension that provides two core capabilities:
-1. **Resource Guard:** Fine-grained, declarative request filtering to block unwanted, tracking, or expensive web resources before download.
-2. **Translation Optimizer:** Low-overhead translation workflow with request deduplication, bounded LRU caching, and safe DOM manipulation.
+**Resource Guardian** is a lightweight, privacy-preserving browser extension built on the WebExtensions Manifest V3 standard. It provides two foundational capabilities:
 
----
-
-## Architecture & Directory Structure
-
-```
-dist/
-  background/service-worker.js
-  content/content-script.js
-  popup/popup.js, popup.html, popup.css
-  options/options.js, options.html, options.css
-  manifest.json
-src/
-  background/ - Service worker and Chrome event listeners
-  content/    - DOM text extraction and translation replacement
-  options/    - Settings & advanced policy management UI
-  popup/      - Quick action toolbar popup
-  rules/      - DeclarativeNetRequest rule compiler & precedence engine
-  shared/     - Settings schema, URL normalization, domain classification
-  translation/- Language detector, provider interface, LRU cache, queue manager
-docs/         - Extension architecture, security & performance documentation
-tests/        - Unit, rule compilation, translation, and DOM JSDOM tests
-```
+1. **Resource Guard:** Native request filtering using the browser's `declarativeNetRequest` (DNR) API to block scripts, trackers, iframes, media, and unwanted network resources *before* they are downloaded.
+2. **Translation Optimizer:** An on-demand text translation engine with bounded LRU caching, request deduplication, sentence-level chunking, and non-destructive DOM manipulation.
 
 ---
 
-## DeclarativeNetRequest & Request Blocking
+## 2. DeclarativeNetRequest Rule Precedence
 
-Resource Guardian uses Chrome's native `declarativeNetRequest` (DNR) dynamic rules to filter network requests **before they download**:
-- **Priority 1000:** Paused domains (User domain exceptions) -> ALLOW
-- **Priority 200-210:** Site-scoped custom rules (Allow / Block)
-- **Priority 100-110:** Global custom rules (Allow / Block)
-- **Priority 50-60:** Per-site category overrides
-- **Priority 10-15:** Global category default policies (e.g., block third-party scripts)
+Resource requests are filtered at the browser network layer without relying on inefficient DOM deletion hacks or `MutationObserver` loops. Rules are structured according to a deterministic 6-tier precedence model:
 
-No heavy `MutationObserver` loops or DOM deletion hacks are used for network request blocking.
+| Tier | Priority Range | Description | Action |
+|------|---------------|-------------|--------|
+| **Tier 1** | `5000` | Browser & Extension Safety Constraints (e.g. `chrome-extension://*`) | `allow` |
+| **Tier 2A** | `1000` | Paused Domain Exceptions (Temporary full bypass for active domain) | `allow` |
+| **Tier 2B** | `210` / `110` | Explicit User Allow Rules (Site-scoped `210`, Global `110`) | `allow` |
+| **Tier 3** | `200` / `100` | Explicit User Block Rules (Site-scoped `200`, Global `100`) | `block` |
+| **Tier 4** | `60` / `50` | Per-site Category Overrides (Allow override `60`, Block override `50`) | `allow` / `block` |
+| **Tier 5** | `15` / `10` | Global Category Default Policies (e.g. block 3rd-party scripts) | `allow` / `block` |
+| **Tier 6** | *Implied* | Default Allow (implied browser default when no blocking rule matches) | `allow` |
 
----
-
-## Translation Optimization
-
-- **Bounded Cache:** LRU cache capped at 500 entries with a 24-hour TTL to avoid unbounded memory growth.
-- **Request Deduplication:** Duplicate in-flight requests for the same text and language pair return the active promise without sending extra network calls.
-- **Safe DOM Extraction:** Skips `<code>`, `<pre>`, `<script>`, `<style>`, `<input>`, and `<textarea>` elements, protecting code blocks, inputs, and password fields. Original text nodes are stored using a `WeakMap` for instant, non-destructive restoration.
+### Quota Safety (`MAX_SAFE_DYNAMIC_RULES`)
+Chrome enforces strict dynamic rule quotas (5,000 standard dynamic rules). Resource Guardian monitors total generated rules against `MAX_SAFE_DYNAMIC_RULES = 5000`. If exceeded, it preserves high-priority safety and user rules, truncates low-priority defaults, and surfaces actionable diagnostic warnings.
 
 ---
 
-## Permissions Rationale & Security
+## 3. Translation Optimizer Architecture
 
-- `declarativeNetRequest` / `declarativeNetRequestWithHostAccess`: Required for native request filtering before download.
-- `storage`: Persists lightweight options and per-site exceptions locally.
-- `activeTab`: Permits on-demand text translation on user interaction.
-- `<all_urls>` host permissions: Allows applying request rules and translating text across user-visited domains.
+### 3.1 Bounded Chunking
+Long text passages are chunked into bounded segments of at most 800 characters (`MAX_CHUNK_LENGTH = 800`) along sentence-ending punctuation or word boundaries to prevent unbounded payload transfers.
 
-No user data or browsing history is tracked, collected, or transmitted.
+### 3.2 In-Flight Deduplication & LRU Cache
+- Identical translation requests generate a canonical key: `${provider}:${sourceLang}:${targetLang}:${text}`.
+- If an in-flight request is pending, duplicate calls join the existing Promise.
+- Completed translations are cached in an LRU cache (capped at 500 entries by default, configurable up to 2000, with a 24-hour TTL).
+
+### 3.3 Non-Destructive DOM Preservation
+- Traversal uses `TreeWalker` skipping `<script>`, `<style>`, `<pre>`, `<code>`, `<input>`, `<textarea>`, and password/contenteditable fields.
+- Original text node values and container directionality (`dir="rtl"` vs `dir="ltr"`) are preserved in a `WeakMap`, guaranteeing exact restoration without DOM reflow anomalies or memory leaks.
+
+---
+
+## 4. Cross-Browser Manifest V3 Compatibility
+
+- **Chromium:** Standard MV3 with `service_worker` background entry (`npm run build` -> `dist/`).
+- **Firefox:** MV3 with `background.scripts` array and `browser_specific_settings.gecko` (`npm run build:firefox` -> `dist-firefox/`).

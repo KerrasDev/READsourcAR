@@ -12,22 +12,22 @@
       <span class="logo">🛡️</span>
       <h1>Resource Guardian</h1>
     </div>
-    <button id="optionsBtn" title="Open Settings">⚙️</button>
+    <button id="optionsBtn" title="Open Settings" aria-label="Open Settings">⚙️</button>
   </div>
 
-  <!-- Global Protection Toggle -->
+  <!-- Global Protection State -->
   <div class="card status-card">
     <div class="status-row">
-      <span>Protection State:</span>
+      <span>Protection Status:</span>
       <strong id="globalStatus" class="status-active">ENABLED</strong>
     </div>
     <button id="toggleProtectionBtn" class="primary-btn">Pause Global Protection</button>
   </div>
 
-  <!-- Current Site Quick Controls -->
+  <!-- Current Site Controls -->
   <div class="card site-card">
     <div class="site-header">
-      <span class="card-title">Current Domain</span>
+      <span class="card-title">Active Site</span>
       <span id="currentDomain" class="domain-badge">example.com</span>
     </div>
     <div class="site-actions">
@@ -37,51 +37,73 @@
 
   <!-- Quick Category Toggles -->
   <div class="card categories-card">
-    <span class="card-title">Resource Rules</span>
+    <div class="card-header-row">
+      <span class="card-title">Resource Filtering</span>
+      <span id="activeRulesCount" class="badge-count">0 rules active</span>
+    </div>
     <div class="category-grid">
-      <label class="toggle-item">
+      <label class="toggle-item" title="Blocks third-party JavaScript files before download">
         <input type="checkbox" id="cat-thirdPartyScript">
-        <span>Block 3rd-Party Scripts</span>
+        <span>3rd-Party Scripts</span>
       </label>
-      <label class="toggle-item">
+      <label class="toggle-item" title="Blocks all JavaScript network requests">
         <input type="checkbox" id="cat-script">
-        <span>Block All Scripts</span>
+        <span>All Scripts</span>
       </label>
-      <label class="toggle-item">
+      <label class="toggle-item" title="Blocks embedded iframes">
         <input type="checkbox" id="cat-iframe">
-        <span>Block Iframes</span>
+        <span>Iframes</span>
       </label>
-      <label class="toggle-item">
+      <label class="toggle-item" title="Blocks web images">
         <input type="checkbox" id="cat-image">
-        <span>Block Images</span>
+        <span>Images</span>
       </label>
-      <label class="toggle-item">
+      <label class="toggle-item" title="Blocks audio and video streaming elements">
         <input type="checkbox" id="cat-media">
-        <span>Block Media (Video/Audio)</span>
+        <span>Media (Audio/Video)</span>
       </label>
-      <label class="toggle-item">
+      <label class="toggle-item" title="Blocks external CSS stylesheets">
+        <input type="checkbox" id="cat-stylesheet">
+        <span>Stylesheets</span>
+      </label>
+      <label class="toggle-item" title="Blocks web fonts">
+        <input type="checkbox" id="cat-font">
+        <span>Fonts</span>
+      </label>
+      <label class="toggle-item" title="Blocks web worker network threads">
+        <input type="checkbox" id="cat-worker">
+        <span>Web Workers</span>
+      </label>
+      <label class="toggle-item" title="Blocks popup navigation requests">
         <input type="checkbox" id="cat-popup">
-        <span>Block Popups</span>
+        <span>Popups</span>
       </label>
     </div>
   </div>
 
-  <!-- Quick Translation Action -->
+  <!-- Translation Optimizer Action -->
   <div class="card translation-card">
-    <span class="card-title">Translation Quick Action</span>
+    <span class="card-title">Translation Optimizer</span>
     <div class="translation-controls">
+      <label for="targetLangSelect" class="sr-only">Target Language</label>
       <select id="targetLangSelect">
-        <option value="en">English</option>
-        <option value="es">Spanish</option>
-        <option value="fr">French</option>
-        <option value="ar">Arabic</option>
-        <option value="de">German</option>
-        <option value="zh">Chinese</option>
+        <option value="en">English (en)</option>
+        <option value="es">Spanish (es)</option>
+        <option value="fr">French (fr)</option>
+        <option value="ar">Arabic (ar - RTL)</option>
+        <option value="de">German (de)</option>
+        <option value="zh">Chinese (zh)</option>
       </select>
       <div class="btn-group">
         <button id="translateSelectionBtn" class="action-btn">Translate Selection</button>
-        <button id="restoreTextBtn" class="outline-btn">Restore Text</button>
+        <button id="translateMainBtn" class="action-btn">Translate Main</button>
+        <button id="cancelTranslationBtn" class="secondary-btn hidden">Cancel</button>
       </div>
+      <div class="btn-group-secondary">
+        <button id="restoreTextBtn" class="outline-btn">Restore Original</button>
+        <button id="copySelectionBtn" class="outline-btn">Copy Text</button>
+      </div>
+      <div id="translationStatus" class="status-msg hidden"></div>
     </div>
   </div>
 

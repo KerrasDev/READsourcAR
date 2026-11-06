@@ -2,7 +2,8 @@ import esbuild from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const outDir = 'dist';
+const isFirefox = process.argv.includes('--firefox');
+const outDir = isFirefox ? 'dist-firefox' : 'dist';
 
 if (fs.existsSync(outDir)) {
   fs.rmSync(outDir, { recursive: true, force: true });
@@ -23,7 +24,31 @@ function copyDir(src, dest) {
   }
 }
 
-copyDir('public', 'dist');
+copyDir('public', outDir);
+
+// If target is Firefox, adapt manifest.json for Firefox MV3 requirements
+if (isFirefox) {
+  const manifestPath = path.join(outDir, 'manifest.json');
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+
+    // Firefox MV3 uses background.scripts array
+    manifest.background = {
+      scripts: ['background/service-worker.js'],
+      type: 'module'
+    };
+
+    // Firefox requires browser_specific_settings for Gecko
+    manifest.browser_specific_settings = {
+      gecko: {
+        id: 'resource-guardian@example.com',
+        strict_min_version: '109.0'
+      }
+    };
+
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  }
+}
 
 const entryPoints = [
   { in: 'src/background/service-worker.ts', out: 'background/service-worker' },
@@ -44,7 +69,7 @@ async function build() {
       minify: true,
       logLevel: 'info'
     });
-    console.log('Build completed successfully.');
+    console.log(`Build completed successfully for ${isFirefox ? 'Firefox' : 'Chromium'} in ${outDir}/`);
   } catch (err) {
     console.error('Build failed:', err);
     process.exit(1);
